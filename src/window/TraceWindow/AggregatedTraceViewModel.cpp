@@ -21,7 +21,7 @@
 
 #include "AggregatedTraceViewModel.h"
 #include <QColor>
-
+#include <QDebug>   
 #include <core/Backend.h>
 #include <core/CanTrace.h>
 #include <core/CanDbMessage.h>
@@ -43,13 +43,13 @@ void AggregatedTraceViewModel::createItem(const CanMessage &msg)
     item->_lastmsg = msg;
 
     CanDbMessage *dbmsg = backend()->findDbMessage(msg);
+
+    int sigCount = 0;
     if (dbmsg)
-    {
-        for (int i = 0; i < dbmsg->getSignals().length(); i++)
-        {
-            item->appendChild(new AggregatedTraceViewItem(item));
-        }
-    }
+        sigCount = dbmsg->getSignals().length();
+
+    for (int i = 0; i < sigCount; i++)
+        item->appendChild(new AggregatedTraceViewItem(item));
 
     _rootItem->appendChild(item);
     _map[makeUniqueKey(msg)] = item;
@@ -206,11 +206,13 @@ int AggregatedTraceViewModel::rowCount(const QModelIndex &parent) const
 
 QVariant AggregatedTraceViewModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid()) return QVariant();
+    if (!index.isValid())
+        return QVariant();
 
     AggregatedTraceViewItem *item =
-        static_cast<AggregatedTraceViewItem*>(index.internalPointer());
-    if (!item) return QVariant();
+        static_cast<AggregatedTraceViewItem *>(index.internalPointer());
+    if (!item)
+        return QVariant();
 
     if (role == Qt::BackgroundRole)
     {
@@ -221,39 +223,40 @@ QVariant AggregatedTraceViewModel::data(const QModelIndex &index, int role) cons
         QColor pastel = messageColorForIdString(idString);
 
         if (!pastel.isValid())
-            return QVariant();
+            return QColor(255, 255, 255);
 
         struct timeval now;
         gettimeofday(&now, 0);
         double diff = getTimeDiff(item->_lastmsg.getTimestamp(), now);
 
         double factor = 1.0 - diff * 0.4;
-        if (factor < 0.0) factor = 0.0;
-        if (factor > 1.0) factor = 1.0;
+        if (factor < 0.0)
+            factor = 0.0;
+        if (factor > 1.0)
+            factor = 1.0;
 
         QColor intenso;
-        intenso.setRed  (std::min(255, (int)(pastel.red()   * 1.25)));
+        intenso.setRed(std::min(255, (int)(pastel.red() * 1.25)));
         intenso.setGreen(std::min(255, (int)(pastel.green() * 1.25)));
-        intenso.setBlue (std::min(255, (int)(pastel.blue()  * 1.25)));
+        intenso.setBlue(std::min(255, (int)(pastel.blue() * 1.25)));
 
-        auto lerp = [&](int a, int b){
+        auto lerp = [&](int a, int b)
+        {
             return (int)(a * (1.0 - factor) + b * factor);
         };
 
-        int r = lerp(pastel.red(),   intenso.red());
+        int r = lerp(pastel.red(), intenso.red());
         int g = lerp(pastel.green(), intenso.green());
-        int b = lerp(pastel.blue(),  intenso.blue());
+        int b = lerp(pastel.blue(), intenso.blue());
 
         return QColor(r, g, b);
     }
-
 
     if (role == Qt::ForegroundRole)
     {
         return data_TextColorRole(index, role);
     }
 
- 
     if (role == Qt::DisplayRole)
     {
         return data_DisplayRole(index, role);
@@ -261,9 +264,6 @@ QVariant AggregatedTraceViewModel::data(const QModelIndex &index, int role) cons
 
     return QVariant();
 }
-
-
-
 QVariant AggregatedTraceViewModel::data_DisplayRole(const QModelIndex &index, int role) const
 {
     AggregatedTraceViewItem *item = (AggregatedTraceViewItem *)index.internalPointer();
@@ -273,32 +273,91 @@ QVariant AggregatedTraceViewModel::data_DisplayRole(const QModelIndex &index, in
     }
 
     if (item->parent() == _rootItem)
-    { // CanMessage row
+    { 
+        // CanMessage row
+        if (index.column() == BaseTraceViewModel::column_name)
+        {
+            QString id = item->_lastmsg.getIdString();
+            QString alias = _idAliases.value(id);
+            // qDebug() << "[AggregatedTraceViewModel" << this
+            //          << "] data_DisplayRole NAME for id" << id
+            //          << "alias in hash =" << alias;
+        }
+
         return data_DisplayRole_Message(index, role, item->_lastmsg, item->_prevmsg);
     }
     else
-    { // CanSignal Row
+    { 
+        // CanSignal Row
         return data_DisplayRole_Signal(index, role, item->parent()->_lastmsg);
     }
 }
+
+
 QVariant AggregatedTraceViewModel::data_TextColorRole(const QModelIndex &index, int role) const
 {
-    (void) role;
-    AggregatedTraceViewItem *item = (AggregatedTraceViewItem *)index.internalPointer();
-    if (!item) { return QVariant(); }
+    (void)role;
 
-    if (item->parent() == _rootItem) { // CanMessage row
+    AggregatedTraceViewItem *item =
+        static_cast<AggregatedTraceViewItem *>(index.internalPointer());
+    if (!item)
+        return QVariant();
+
+    bool isMessageRow = (item->parent() == _rootItem);
+
+    if (isMessageRow)
+    {
+        QString idString = item->_lastmsg.getIdString();
+        QColor aliasColor = messageColorForIdString(idString);
+
+        if (aliasColor.isValid())
+        {
+
+            return QColor(0, 0, 0);
+        }
 
         struct timeval now;
         gettimeofday(&now, 0);
+        int gray = getTimeDiff(item->_lastmsg.getTimestamp(), now) * 100;
+        if (gray > 200)
+            gray = 200;
+        if (gray < 0)
+            gray = 0;
 
-        int color = getTimeDiff(item->_lastmsg.getTimestamp(), now)*100;
-        if (color>200) { color = 200; }
-        if (color<0) { color = 0; }
+        QColor text(gray, gray, gray);
 
-        return QVariant::fromValue(QColor(color, color, color));
-    } else { // CanSignal Row
-        return data_TextColorRole_Signal(index, role, item->parent()->_lastmsg);
+        if (index.column() == BaseTraceViewModel::column_name ||
+            index.column() == BaseTraceViewModel::column_canid)
+        {
+            if (gray > 200)
+                return QColor(0, 0, 0);
+        }
+
+        return text;
     }
+
+    return data_TextColorRole_Signal(index, role, item->parent()->_lastmsg);
 }
 
+
+void AggregatedTraceViewModel::updateAliasForId(const QString &idString, const QString &alias)
+{
+    // Actualizar el hash global
+    _idAliases[idString] = alias;
+    
+    // Buscar el item específico en el mapa
+    for (auto it = _map.begin(); it != _map.end(); ++it)
+    {
+        AggregatedTraceViewItem *item = it.value();
+        if (item && item->_lastmsg.getIdString() == idString)
+        {
+            // Encontramos el item, emitir dataChanged solo para esta fila
+            int row = item->row();
+            QModelIndex topLeft = createIndex(row, 0, item);
+            QModelIndex bottomRight = createIndex(row, column_count - 1, item);
+            
+            emit dataChanged(topLeft, bottomRight, { Qt::DisplayRole });
+            break;  // Solo hay un item por ID único
+        }
+    }
+}

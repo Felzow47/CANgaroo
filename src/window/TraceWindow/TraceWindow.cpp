@@ -37,6 +37,7 @@
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QDebug>   
 #include <QFrame>
 
 static QColor toPastel(const QColor &c)
@@ -110,23 +111,32 @@ TraceWindow::~TraceWindow()
     delete _aggregatedTraceViewModel;
     delete _linearTraceViewModel;
 }
-
 void TraceWindow::setMode(TraceWindow::mode_t mode)
 {
+    // qDebug() << "TraceWindow::setMode from"
+    //          << (_mode == mode_linear ? "linear" : "aggregated")
+    //          << "to"
+    //          << (mode == mode_linear ? "linear" : "aggregated");
+
+    // qDebug() << "  [Before] Linear aliases:"
+    //          << _linearTraceViewModel->getAllIdAliases();
+    // qDebug() << "  [Before] Aggregated aliases:"
+    //          << _aggregatedTraceViewModel->getAllIdAliases();
+
     bool isChanged = (_mode != mode);
     _mode = mode;
 
     if (_mode == mode_linear)
     {
         ui->tree->setSortingEnabled(false);
-        ui->tree->setModel(_linFilteredModel); //_linearTraceViewModel);
+        ui->tree->setModel(_linFilteredModel);
         ui->cbAutoScroll->setEnabled(true);
         ui->tree->sortByColumn(BaseTraceViewModel::column_index, Qt::AscendingOrder);
     }
     else
     {
         ui->tree->setSortingEnabled(true);
-        ui->tree->setModel(_aggFilteredModel); //_aggregatedProxyModel);
+        ui->tree->setModel(_aggFilteredModel);
         ui->cbAutoScroll->setEnabled(false);
         ui->tree->sortByColumn(BaseTraceViewModel::column_canid, Qt::AscendingOrder);
     }
@@ -135,6 +145,7 @@ void TraceWindow::setMode(TraceWindow::mode_t mode)
 
     if (isChanged)
     {
+        // qDebug() << "  setMode: syncing aliases and colors between models";
 
         _aggregatedTraceViewModel->restoreIdAliases(
             _linearTraceViewModel->getAllIdAliases());
@@ -146,8 +157,17 @@ void TraceWindow::setMode(TraceWindow::mode_t mode)
         _linearTraceViewModel->restoreIdColors(
             _aggregatedTraceViewModel->getAllIdColors());
 
-        _linearTraceViewModel->layoutChanged();
-        _aggregatedTraceViewModel->layoutChanged();
+        // qDebug() << "  [After sync] Linear aliases:"
+        //          << _linearTraceViewModel->getAllIdAliases();
+        // qDebug() << "  [After sync] Aggregated aliases:"
+        //          << _aggregatedTraceViewModel->getAllIdAliases();
+
+        emit _linearTraceViewModel->dataChanged(QModelIndex(), QModelIndex(),
+                                                {Qt::DisplayRole, Qt::ForegroundRole, Qt::BackgroundRole});
+
+        emit _aggregatedTraceViewModel->dataChanged(QModelIndex(), QModelIndex(),
+                                                    {Qt::DisplayRole, Qt::ForegroundRole, Qt::BackgroundRole});
+
         ui->cbAggregated->setChecked(_mode == mode_aggregated);
 
         emit(settingsChanged(this));
@@ -369,14 +389,22 @@ void TraceWindow::on_cbTraceClearpushButton()
     _backend->clearTrace();
     _backend->clearLog();
 }
+
 void TraceWindow::onTraceRowDoubleClicked(const QModelIndex &index)
 {
     QAbstractItemModel *viewModel = ui->tree->model();
     if (!viewModel)
         return;
 
+
     if (index.parent().isValid())
         return;
+
+    // qDebug() << "onTraceRowDoubleClicked: mode="
+    //          << (_mode == mode_linear ? "linear" : "aggregated")
+    //          << "viewModel=" << viewModel
+    //          << "row=" << index.row()
+    //          << "col=" << index.column();
 
     QString idString;
     const CanMessage *exampleMsg = nullptr;
@@ -389,26 +417,70 @@ void TraceWindow::onTraceRowDoubleClicked(const QModelIndex &index)
         quintptr internal = src2.internalId();
         int msgId = (internal & ~0x80000000u) - 1;
 
-        if (msgId >= 0 && msgId < _backend->getTrace()->size())
+        // qDebug() << "  [linear] internalId=" << Qt::hex << internal
+        //          << "msgId=" << msgId;
+
+        if (msgId >= 0 && msgId < static_cast<int>(_backend->getTrace()->size()))
         {
             exampleMsg = _backend->getTrace()->getMessage(msgId);
             if (exampleMsg)
+            {
                 idString = exampleMsg->getIdString();
+                // qDebug() << "  [linear] exampleMsg rawId=" << Qt::hex << exampleMsg->getRawId()
+                //          << "idString=" << idString;
+            }
         }
     }
     else
     {
+        QModelIndex src1 = _aggFilteredModel->mapToSource(index);
+        QModelIndex src2 = _aggregatedProxyModel->mapToSource(src1);
+
+        // qDebug() << "  [aggregated] src1 row=" << src1.row()
+        //          << "col=" << src1.column()
+        //          << "internalPointer=" << src1.internalPointer();
+
+        // qDebug() << "  [aggregated] src2 row=" << src2.row()
+        //          << "col=" << src2.column()
+        //          << "internalPointer=" << src2.internalPointer();
+
         AggregatedTraceViewItem *item =
-            static_cast<AggregatedTraceViewItem *>(index.internalPointer());
+            static_cast<AggregatedTraceViewItem *>(src2.internalPointer());
         if (item)
         {
             exampleMsg = &item->_lastmsg;
-            idString = item->_lastmsg.getIdString();
+            idString = exampleMsg->getIdString();
+
+            // qDebug() << "  [aggregated] exampleMsg rawId=" << Qt::hex << exampleMsg->getRawId()
+            //          << "idString=" << idString;
+        }
+        else
+        {
+            // qDebug() << "  [aggregated] item is null after mapping, aborting";
         }
     }
 
-    if (idString.isEmpty())
+    if (idString.isEmpty() || !exampleMsg)
+    {
+        // qDebug() << "  [onTraceRowDoubleClicked] No valid message found, abort.";
         return;
+    }
+
+    bool isLinear = (_mode == mode_linear);
+    BaseTraceViewModel *model =
+        isLinear ? static_cast<BaseTraceViewModel *>(_linearTraceViewModel)
+                 : static_cast<BaseTraceViewModel *>(_aggregatedTraceViewModel);
+
+    if (!model)
+        return;
+
+    QColor currentColor = model->messageColorForIdString(idString);
+    if (!currentColor.isValid())
+        currentColor = QColor(208, 208, 208);
+
+    // qDebug() << "  isLinear=" << isLinear
+    //          << "using model=" << model
+    //          << "currentColor initial =" << currentColor;
 
     QString currentName;
 
@@ -417,18 +489,6 @@ void TraceWindow::onTraceRowDoubleClicked(const QModelIndex &index)
         if (CanDbMessage *dbmsg = _backend->findDbMessage(*exampleMsg))
             currentName = dbmsg->getName();
     }
-
-    bool isLinear = (_mode == mode_linear);
-    BaseTraceViewModel *model =
-        isLinear ? (BaseTraceViewModel *)_linearTraceViewModel
-                 : (BaseTraceViewModel *)_aggregatedTraceViewModel;
-
-    if (!model)
-        return;
-
-    QColor currentColor = model->messageColorForIdString(idString);
-    if (!currentColor.isValid())
-        currentColor = QColor(208, 208, 208);
 
     QString currentComment;
     int msgId = -1;
@@ -440,6 +500,9 @@ void TraceWindow::onTraceRowDoubleClicked(const QModelIndex &index)
 
         quintptr internal = sourceIndex.internalId();
         msgId = (internal & ~0x80000000u) - 1;
+
+        // qDebug() << "  [linear] sourceIndex internalId=" << Qt::hex << internal
+        //          << "msgId=" << msgId;
 
         if (msgId >= 0)
             currentComment = model->commentForMessage(msgId);
@@ -486,7 +549,10 @@ void TraceWindow::onTraceRowDoubleClicked(const QModelIndex &index)
             tr("Select color for %1").arg(idString));
 
         if (chosen.isValid()) {
-            currentColor = toPastel(chosen);
+            QColor pastel = toPastel(chosen);
+            // qDebug() << "  Color chosen =" << chosen
+            //          << "pastel =" << pastel;
+            currentColor = pastel;
             updatePreview(currentColor);
         } });
 
@@ -506,14 +572,32 @@ void TraceWindow::onTraceRowDoubleClicked(const QModelIndex &index)
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
-    if (dialog.exec() == QDialog::Accepted)
+    int result = dialog.exec();
+    // qDebug() << "  dialog result =" << result;
+
+    if (result == QDialog::Accepted)
     {
         QString newName = nameEdit->text().trimmed();
+        // qDebug() << "  newName =" << newName
+        //          << "currentColor final =" << currentColor;
+
         if (!newName.isEmpty())
-            model->updateAliasForIdString(idString, newName);
+        {
+            // qDebug() << "  Updating alias in BOTH models for id =" << idString;
+            _linearTraceViewModel->updateAliasForIdString(idString, newName);
+            _aggregatedTraceViewModel->updateAliasForIdString(idString, newName);
+
+            // qDebug() << "  After update: Linear aliases ="
+            //          << _linearTraceViewModel->getAllIdAliases();
+            // qDebug() << "  After update: Aggregated aliases ="
+            //          << _aggregatedTraceViewModel->getAllIdAliases();
+        }
 
         if (currentColor.isValid())
-            model->setMessageColorForIdString(idString, currentColor);
+        {
+            _linearTraceViewModel->setMessageColorForIdString(idString, currentColor);
+            _aggregatedTraceViewModel->setMessageColorForIdString(idString, currentColor);
+        }
 
         if (isLinear && commentEdit && msgId >= 0)
         {
@@ -528,6 +612,3 @@ void TraceWindow::onTraceRowDoubleClicked(const QModelIndex &index)
         }
     }
 }
-
-
-

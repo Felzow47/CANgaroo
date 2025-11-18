@@ -51,21 +51,24 @@ bool TxGeneratorWindow::loadXML(Backend &backend, QDomElement &el)
 
 void TxGeneratorWindow::SendTimer_timeout()
 {
+qDebug() << "[TxGeneratorWindow] SendTimer_timeout() called";
 
 }
 
 void TxGeneratorWindow::update()
 {
+    qDebug() << "[TxGeneratorWindow] update() called";
     //fprintf(stderr, "update\r\n");
 }
 
 void TxGeneratorWindow::on_treeWidget_itemClicked(QTreeWidgetItem *item, int column)
 {
-
+    qDebug() << "[TxGeneratorWindow] on_treeWidget_itemClicked() called";
 }
 
 void TxGeneratorWindow::on_btnAdd_released()
 {
+      qDebug() << "[TxGeneratorWindow] on_btnAdd_released() called";
     MeasurementSetup &setup = _backend.getSetup();
 
     foreach (MeasurementNetwork *network, setup.getNetworks())

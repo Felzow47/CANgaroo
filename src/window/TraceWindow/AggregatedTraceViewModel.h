@@ -49,6 +49,7 @@ public:
     virtual QModelIndex index(int row, int column, const QModelIndex &parent) const;
     virtual QModelIndex parent(const QModelIndex &child) const;
     virtual int rowCount(const QModelIndex &parent) const;
+     void updateAliasForId(const QString &idString, const QString &alias);
 
 private:
     CanIdMap _map;

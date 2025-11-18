@@ -26,13 +26,14 @@
 #include <QTimer>
 #include <core/Backend.h>
 #include <driver/CanInterface.h>
+#include <core/CanTrace.h>
 
-RawTxWindow::RawTxWindow(QWidget *parent, Backend &backend) :
-    ConfigurableWidget(parent),
-    ui(new Ui::RawTxWindow),
-    _backend(backend)
+RawTxWindow::RawTxWindow(QWidget *parent, Backend &backend) : ConfigurableWidget(parent),
+                                                              ui(new Ui::RawTxWindow),
+                                                              _backend(backend)
 {
     ui->setupUi(this);
+    ui->checkBox_Display_TX->setChecked(true);
 
     connect(ui->singleSendButton, SIGNAL(released()), this, SLOT(sendRawMessage()));
     connect(ui->repeatSendButton, SIGNAL(toggled(bool)), this, SLOT(sendRepeatMessage(bool)));
@@ -44,9 +45,9 @@ RawTxWindow::RawTxWindow(QWidget *parent, Backend &backend) :
     connect(ui->comboBoxInterface, SIGNAL(currentIndexChanged(int)), this, SLOT(updateCapabilities()));
     connect(ui->checkbox_FD, SIGNAL(stateChanged(int)), this, SLOT(updateCapabilities()));
 
-    connect(&backend, SIGNAL(beginMeasurement()),  this, SLOT(refreshInterfaces()));
+    connect(&backend, SIGNAL(beginMeasurement()), this, SLOT(refreshInterfaces()));
 
-    connect(&backend, SIGNAL(endMeasurement()),  this, SLOT(refreshInterfaces()));
+    connect(&backend, SIGNAL(endMeasurement()), this, SLOT(refreshInterfaces()));
 
     // Timer for repeating messages
     repeatmsg_timer = new QTimer(this);
@@ -58,12 +59,11 @@ RawTxWindow::RawTxWindow(QWidget *parent, Backend &backend) :
     connect(sendstate_timer, SIGNAL(timeout()), this, SLOT(sendstate_timer_timeout()));
 
     // TODO: Grey out checkboxes that are invalid depending on DLC spinbox state
-    //connect(ui->fieldDLC, SIGNAL(valueChanged(int)), this, SLOT(changeDLC(int)));
+    // connect(ui->fieldDLC, SIGNAL(valueChanged(int)), this, SLOT(changeDLC(int)));
     connect(ui->comboBoxDLC, SIGNAL(currentIndexChanged(int)), this, SLOT(changeDLC()));
 
     // Disable TX until interfaces are present
     this->setDisabled(1);
-
 }
 
 RawTxWindow::~RawTxWindow()
@@ -148,68 +148,68 @@ void RawTxWindow::changeDLC()
     uint8_t dlc = ui->comboBoxDLC->currentData().toUInt();
 
     // If DLC > 8, must be FD
-    if(dlc > 8)
+    if (dlc > 8)
     {
         ui->checkbox_FD->setChecked(true);
     }
 
-    switch(dlc)
+    switch (dlc)
     {
-        case 0:
-            ui->fieldByte0_0->setEnabled(false);
-            //fallthrough
-        case 1:
-            ui->fieldByte1_0->setEnabled(false);
-            //fallthrough
+    case 0:
+        ui->fieldByte0_0->setEnabled(false);
+        // fallthrough
+    case 1:
+        ui->fieldByte1_0->setEnabled(false);
+        // fallthrough
 
-        case 2:
-            ui->fieldByte2_0->setEnabled(false);
-            //fallthrough
+    case 2:
+        ui->fieldByte2_0->setEnabled(false);
+        // fallthrough
 
-        case 3:
-            ui->fieldByte3_0->setEnabled(false);
-            //fallthrough
+    case 3:
+        ui->fieldByte3_0->setEnabled(false);
+        // fallthrough
 
-        case 4:
-            ui->fieldByte4_0->setEnabled(false);
-            //fallthrough
+    case 4:
+        ui->fieldByte4_0->setEnabled(false);
+        // fallthrough
 
-        case 5:
-            ui->fieldByte5_0->setEnabled(false);
-            //fallthrough
+    case 5:
+        ui->fieldByte5_0->setEnabled(false);
+        // fallthrough
 
-        case 6:
-            ui->fieldByte6_0->setEnabled(false);
-            //fallthrough
+    case 6:
+        ui->fieldByte6_0->setEnabled(false);
+        // fallthrough
 
-        case 7:
-            ui->fieldByte7_0->setEnabled(false);
-            //fallthrough
+    case 7:
+        ui->fieldByte7_0->setEnabled(false);
+        // fallthrough
 
-        case 8:
-            ui->fieldByte0_1->setEnabled(false);
-            ui->fieldByte1_1->setEnabled(false);
-            ui->fieldByte2_1->setEnabled(false);
-            ui->fieldByte3_1->setEnabled(false);
-            //fallthrough
-        case 12:
-            ui->fieldByte4_1->setEnabled(false);
-            ui->fieldByte5_1->setEnabled(false);
-            ui->fieldByte6_1->setEnabled(false);
-            ui->fieldByte7_1->setEnabled(false);
-            //fallthrough
+    case 8:
+        ui->fieldByte0_1->setEnabled(false);
+        ui->fieldByte1_1->setEnabled(false);
+        ui->fieldByte2_1->setEnabled(false);
+        ui->fieldByte3_1->setEnabled(false);
+        // fallthrough
+    case 12:
+        ui->fieldByte4_1->setEnabled(false);
+        ui->fieldByte5_1->setEnabled(false);
+        ui->fieldByte6_1->setEnabled(false);
+        ui->fieldByte7_1->setEnabled(false);
+        // fallthrough
     case 16:
         ui->fieldByte0_2->setEnabled(false);
         ui->fieldByte1_2->setEnabled(false);
         ui->fieldByte2_2->setEnabled(false);
         ui->fieldByte3_2->setEnabled(false);
-        //fallthrough
+        // fallthrough
     case 20:
         ui->fieldByte4_2->setEnabled(false);
         ui->fieldByte5_2->setEnabled(false);
         ui->fieldByte6_2->setEnabled(false);
         ui->fieldByte7_2->setEnabled(false);
-        //fallthrough
+        // fallthrough
     case 24:
         ui->fieldByte0_3->setEnabled(false);
         ui->fieldByte1_3->setEnabled(false);
@@ -219,7 +219,7 @@ void RawTxWindow::changeDLC()
         ui->fieldByte5_3->setEnabled(false);
         ui->fieldByte6_3->setEnabled(false);
         ui->fieldByte7_3->setEnabled(false);
-        //fallthrough
+        // fallthrough
     case 32:
         ui->fieldByte0_4->setEnabled(false);
         ui->fieldByte1_4->setEnabled(false);
@@ -238,7 +238,7 @@ void RawTxWindow::changeDLC()
         ui->fieldByte5_5->setEnabled(false);
         ui->fieldByte6_5->setEnabled(false);
         ui->fieldByte7_5->setEnabled(false);
-        //fallthrough
+        // fallthrough
     case 48:
         ui->fieldByte0_6->setEnabled(false);
         ui->fieldByte1_6->setEnabled(false);
@@ -257,22 +257,21 @@ void RawTxWindow::changeDLC()
         ui->fieldByte5_7->setEnabled(false);
         ui->fieldByte6_7->setEnabled(false);
         ui->fieldByte7_7->setEnabled(false);
-
     }
-//    repeatmsg_timer->setInterval(ms);
+    //    repeatmsg_timer->setInterval(ms);
 }
 
 void RawTxWindow::updateCapabilities()
 {
     // check if intf suports fd, if, enable, else dis
-    //CanInterface *intf = _backend.getInterfaceById(idx);
-    if(ui->comboBoxInterface->count() > 0)
+    // CanInterface *intf = _backend.getInterfaceById(idx);
+    if (ui->comboBoxInterface->count() > 0)
     {
         // By default BRS should be available
 
         CanInterface *intf = _backend.getInterfaceById((CanInterfaceId)ui->comboBoxInterface->currentData().toUInt());
 
-        if(intf == NULL)
+        if (intf == NULL)
         {
             return;
         }
@@ -280,7 +279,7 @@ void RawTxWindow::updateCapabilities()
         int idx_restore = ui->comboBoxDLC->currentIndex();
 
         // If CANFD is available
-        if(intf->getCapabilities() & intf->capability_canfd)
+        if (intf->getCapabilities() & intf->capability_canfd)
         {
             ui->comboBoxDLC->clear();
             ui->comboBoxDLC->addItem("0", 0);
@@ -301,13 +300,13 @@ void RawTxWindow::updateCapabilities()
             ui->comboBoxDLC->addItem("64", 64);
 
             // Restore previous selected DLC if available
-            if(idx_restore > 1 && idx_restore < ui->comboBoxDLC->count())
+            if (idx_restore > 1 && idx_restore < ui->comboBoxDLC->count())
                 ui->comboBoxDLC->setCurrentIndex(idx_restore);
 
             ui->checkbox_FD->setDisabled(0);
 
             // Enable BRS if this is an FD frame
-            if(ui->checkbox_FD->isChecked())
+            if (ui->checkbox_FD->isChecked())
             {
                 // Enable BRS if FD enabled
                 ui->checkbox_BRS->setDisabled(0);
@@ -324,7 +323,6 @@ void RawTxWindow::updateCapabilities()
 
                 // Enable RTR if FD disabled
                 ui->checkBox_IsRTR->setDisabled(0);
-
             }
             showFDFields();
         }
@@ -343,7 +341,7 @@ void RawTxWindow::updateCapabilities()
             ui->comboBoxDLC->addItem("8", 8);
 
             // Restore previous selected DLC if available
-            if(idx_restore > 1 && idx_restore < ui->comboBoxDLC->count())
+            if (idx_restore > 1 && idx_restore < ui->comboBoxDLC->count())
                 ui->comboBoxDLC->setCurrentIndex(idx_restore);
 
             // Unset/disable FD / BRS checkboxes
@@ -356,14 +354,13 @@ void RawTxWindow::updateCapabilities()
             ui->checkBox_IsRTR->setDisabled(0);
 
             hideFDFields();
-
         }
     }
 }
 
 void RawTxWindow::changeRepeatRate(int ms)
 {
-    if(ms)
+    if (ms)
         repeatmsg_timer->setInterval(ms);
     else
         ui->spinBox_RepeatRate->setValue(1);
@@ -371,9 +368,12 @@ void RawTxWindow::changeRepeatRate(int ms)
 
 void RawTxWindow::sendRepeatMessage(bool enable)
 {
-    if(enable)
+    qDebug() << "[RawTxWindow] sendRepeatMessage enable=" << enable;
+
+    if (enable)
     {
         reflash_can_msg();
+        qDebug() << "  Starting repeat with rate=" << ui->spinBox_RepeatRate->value();
 
         char outmsg[256];
         _intf = _backend.getInterfaceById((CanInterfaceId)ui->comboBoxInterface->currentData().toUInt());
@@ -398,26 +398,38 @@ void RawTxWindow::sendRepeatMessage(bool enable)
 
 void RawTxWindow::repeatmsg_timer_timeout()
 {
-    if(!_intf->isOpen())
+    qDebug() << "[RawTxWindow] repeatmsg_timer_timeout() ENTER";
+    if (!_intf->isOpen())
     {
+        qDebug() << "  ERROR: _intf == NULL";
         log_error(_intf->getName() + " not Open!");
         return;
     }
+    qDebug() << "  Interface:" << _intf->getName() << "isOpen=" << _intf->isOpen();
     _intf->sendMessage(_can_msg);
+    if (ui->checkBox_Display_TX->isChecked())
+    {
+        _can_msg.setRX(false);
+        _can_msg.setShow(true);
+        _backend.getTrace()->enqueueMessage(_can_msg);
+    }
+    qDebug() << "  Sending periodic CAN frame id=" << Qt::hex << _can_msg.getId()
+             << "len=" << _can_msg.getLength()
+             << "data=" << _can_msg.getDataHexString();
 }
 
 void RawTxWindow::disableTxWindow(int disable)
 {
-    if(disable)
+    if (disable)
     {
-        if(ui->repeatSendButton->isChecked())
+        if (ui->repeatSendButton->isChecked())
             ui->repeatSendButton->toggle();
         this->setDisabled(1);
     }
     else
     {
         // Only enable if an interface is present
-        if(_backend.getInterfaceList().count() > 0)
+        if (_backend.getInterfaceList().count() > 0)
             this->setDisabled(0);
         else
             this->setDisabled(1);
@@ -426,15 +438,18 @@ void RawTxWindow::disableTxWindow(int disable)
 
 void RawTxWindow::refreshInterfaces()
 {
+    qDebug() << "[RawTxWindow] refreshInterfaces()";
+
     ui->comboBoxInterface->clear();
 
     int cb_idx = 0;
 
     // TODO: Only show interfaces that are included in active MeasurementInterfaces!
-    foreach (CanInterfaceId ifid, _backend.getInterfaceList()) {
+    foreach (CanInterfaceId ifid, _backend.getInterfaceList())
+    {
         CanInterface *intf = _backend.getInterfaceById(ifid);
 
-        if(intf->isOpen())
+        if (intf->isOpen())
         {
             ui->comboBoxInterface->addItem(intf->getName() + " " + intf->getDriver()->getName());
             ui->comboBoxInterface->setItemData(cb_idx, QVariant(ifid));
@@ -442,10 +457,10 @@ void RawTxWindow::refreshInterfaces()
         }
     }
 
-    if(cb_idx == 0)
+    if (cb_idx == 0)
     {
         disableTxWindow(1);
-        if(sendstate_timer->isActive())
+        if (sendstate_timer->isActive())
         {
             sendstate_timer->stop();
         }
@@ -453,7 +468,7 @@ void RawTxWindow::refreshInterfaces()
     else
     {
         disableTxWindow(0);
-        if(!sendstate_timer->isActive())
+        if (!sendstate_timer->isActive())
         {
             sendstate_timer->start();
         }
@@ -464,6 +479,10 @@ void RawTxWindow::refreshInterfaces()
 
 void RawTxWindow::reflash_can_msg()
 {
+    qDebug() << "[RawTxWindow] reflash_can_msg() id="
+             << ui->fieldAddress->text()
+             << "dlc=" << ui->comboBoxDLC->currentData().toUInt();
+
     bool en_extended = ui->checkBox_IsExtended->isChecked();
     bool en_rtr = ui->checkBox_IsRTR->isChecked();
     bool en_brs = ui->checkbox_BRS->isChecked();
@@ -547,23 +566,23 @@ void RawTxWindow::reflash_can_msg()
     uint32_t address = ui->fieldAddress->text().toUpper().toUInt(NULL, 16);
 
     // If address is beyond std address namespace, force extended
-    if(address > 0x7ff)
+    if (address > 0x7ff)
     {
         en_extended = true;
         ui->checkBox_IsExtended->setChecked(true);
     }
 
     // If address is larger than max for extended, clip
-    if(address >= 0x1FFFFFFF)
+    if (address >= 0x1FFFFFFF)
     {
         address = address & 0x1FFFFFFF;
-        ui->fieldAddress->setText(QString::number( address, 16 ).toUpper());
+        ui->fieldAddress->setText(QString::number(address, 16).toUpper());
     }
 
-    uint8_t dlc =ui->comboBoxDLC->currentData().toUInt();
+    uint8_t dlc = ui->comboBoxDLC->currentData().toUInt();
 
     // If DLC > 8, must be FD
-    if(dlc > 8)
+    if (dlc > 8)
     {
         en_fd = true;
         ui->checkbox_FD->setChecked(true);
@@ -580,7 +599,7 @@ void RawTxWindow::reflash_can_msg()
     _can_msg.setFD(en_fd);
 
     // Set payload data
-    for(int i=0; i<dlc; i++)
+    for (int i = 0; i < dlc; i++)
     {
         _can_msg.setDataAt(i, data_int[i]);
     }
@@ -589,37 +608,49 @@ void RawTxWindow::reflash_can_msg()
     _can_msg.setShow(ui->checkBox_Display_TX->isChecked());
 
     struct timeval tv;
-    gettimeofday(&tv,NULL);
+    gettimeofday(&tv, NULL);
     _can_msg.setTimestamp(tv);
 }
 
 void RawTxWindow::sendRawMessage()
 {
+    qDebug() << "[RawTxWindow] sendRawMessage() ENTER";
     reflash_can_msg();
 
     CanInterface *intf = _backend.getInterfaceById((CanInterfaceId)ui->comboBoxInterface->currentData().toUInt());
-    if(!intf->isOpen())
+    if (!intf->isOpen())
     {
         log_error(intf->getName() + " not Open!");
         return;
     }
+    qDebug() << "  Interface:" << intf->getName() << "isOpen=" << intf->isOpen();
+
     _can_msg.setInterfaceId(intf->getId());
     intf->sendMessage(_can_msg);
+
+    if (ui->checkBox_Display_TX->isChecked())
+    {
+        _can_msg.setRX(false);
+        _can_msg.setShow(true);
+        _backend.getTrace()->enqueueMessage(_can_msg);
+    }
+    qDebug() << "  Sending CAN frame id=" << Qt::hex << _can_msg.getId()
+             << "len=" << _can_msg.getLength()
+             << "data=" << _can_msg.getDataHexString();
 
     char outmsg[256];
     snprintf(outmsg, 256, "Send [%s] to %d on port %s [ext=%u rtr=%u err=%u fd=%u brs=%u]",
              _can_msg.getDataHexString().toLocal8Bit().constData(), _can_msg.getId(), intf->getName().toLocal8Bit().constData(),
              _can_msg.isExtended(), _can_msg.isRTR(), _can_msg.isErrorFrame(), _can_msg.isFD(), _can_msg.isBRS());
     log_info(outmsg);
-
 }
 
 void RawTxWindow::sendstate_timer_timeout()
 {
     CanInterface *intf = _backend.getInterfaceById((CanInterfaceId)ui->comboBoxInterface->currentData().toUInt());
-    if(intf->isOpen())
+    if (intf->isOpen())
     {
-        if(intf->getState() == CanInterface::state_tx_fail || intf->getState() == CanInterface::state_tx_success)
+        if (intf->getState() == CanInterface::state_tx_fail || intf->getState() == CanInterface::state_tx_success)
             ui->label_3->setText(intf->getName() + ' ' + intf->getStateText());
         else
             ui->label_3->setText("");
@@ -628,14 +659,20 @@ void RawTxWindow::sendstate_timer_timeout()
 
 bool RawTxWindow::saveXML(Backend &backend, QDomDocument &xml, QDomElement &root)
 {
-    if (!ConfigurableWidget::saveXML(backend, xml, root)) { return false; }
+    if (!ConfigurableWidget::saveXML(backend, xml, root))
+    {
+        return false;
+    }
     root.setAttribute("type", "RawTxWindow");
     return true;
 }
 
 bool RawTxWindow::loadXML(Backend &backend, QDomElement &el)
 {
-    if (!ConfigurableWidget::loadXML(backend, el)) { return false; }
+    if (!ConfigurableWidget::loadXML(backend, el))
+    {
+        return false;
+    }
     return true;
 }
 
@@ -723,7 +760,6 @@ void RawTxWindow::hideFDFields()
     ui->fieldByte7_7->hide();
 }
 
-
 void RawTxWindow::showFDFields()
 {
 
@@ -743,7 +779,6 @@ void RawTxWindow::showFDFields()
     ui->label_pay6->show();
     ui->label_pay7->show();
     ui->label_pay8->show();
-
 
     ui->fieldByte0_1->show();
     ui->fieldByte1_1->show();
@@ -809,13 +844,12 @@ void RawTxWindow::showFDFields()
     ui->fieldByte7_7->show();
 }
 
-
 void RawTxWindow::fieldAddress_textChanged(QString str)
 {
     uint32_t address = ui->fieldAddress->text().toUpper().toUInt(NULL, 16);
 
     // If address is beyond std address namespace, force extended
-    if(address > 0x7ff || str.length() > 3)
+    if (address > 0x7ff || str.length() > 3)
     {
         ui->checkBox_IsExtended->setChecked(true);
     }
@@ -823,5 +857,4 @@ void RawTxWindow::fieldAddress_textChanged(QString str)
     {
         ui->checkBox_IsExtended->setChecked(false);
     }
-
 }

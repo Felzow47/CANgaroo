@@ -32,47 +32,47 @@
 <context>
     <name>BaseTraceViewModel</name>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="56"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="57"/>
         <source>Index</source>
         <translation>Índice</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="58"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="59"/>
         <source>Timestamp</source>
         <translation>Marca de tiempo</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="60"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="61"/>
         <source>Channel</source>
         <translation>Canal</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="62"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="63"/>
         <source>RX/TX</source>
         <translation>RX/TX</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="64"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="65"/>
         <source>Type</source>
         <translation>Tipo</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="68"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="69"/>
         <source>Sender</source>
         <translation>Emisor</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="70"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="71"/>
         <source>Name</source>
         <translation>Nombre</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="74"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="75"/>
         <source>Data</source>
         <translation>Datos</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="76"/>
+        <location filename="../window/TraceWindow/BaseTraceViewModel.cpp" line="77"/>
         <source>Comment</source>
         <translation>Comentario</translation>
     </message>
@@ -1117,42 +1117,42 @@
         <translation>Filtro: </translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="90"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="91"/>
         <source>Absolute</source>
         <translation>Absoluto</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="91"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="92"/>
         <source>Relative</source>
         <translation>Relativo</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="92"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="93"/>
         <source>Delta</source>
         <translation>Delta</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="450"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="513"/>
         <source>Edit alias, color and comment</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="451"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="514"/>
         <source>Choose alias and color</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="463"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="526"/>
         <source>Choose color</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="486"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="549"/>
         <source>Select color for %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="498"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="564"/>
         <source>Comment:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1165,7 +1165,7 @@
         <translation type="vanished">Editar alias y color</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="457"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="520"/>
         <source>Alias:</source>
         <translation>Alias:</translation>
     </message>
@@ -1174,7 +1174,7 @@
         <translation type="vanished">Elegir color</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="479"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="542"/>
         <source>Color:</source>
         <translation>Color:</translation>
     </message>

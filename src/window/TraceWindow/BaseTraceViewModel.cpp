@@ -31,6 +31,7 @@
 #include <core/CanMessage.h>
 #include <core/CanDbMessage.h>
 #include <iostream>
+#include <QDebug>   
 
 BaseTraceViewModel::BaseTraceViewModel(Backend &backend)
 {
@@ -234,11 +235,15 @@ QVariant BaseTraceViewModel::data_DisplayRole_Message(const QModelIndex &index, 
     case column_name:
     {
         QString id = currentMsg.getIdString();
+
         QString alias = _idAliases.value(id);
         if (!alias.isEmpty())
             return alias;
 
-        return QString();
+        if (dbmsg)
+            return dbmsg->getName();
+
+        return "";
     }
 
     case column_sender:
@@ -509,31 +514,26 @@ bool BaseTraceViewModel::setData(const QModelIndex &index, const QVariant &value
 void BaseTraceViewModel::updateAliasForIdString(const QString &idString,
                                                 const QString &alias)
 {
+    // qDebug() << "[BaseTraceViewModel" << this
+    //          << "] updateAliasForIdString id=" << idString
+    //          << "alias=" << alias
+    //          << "rows=" <<
+    //           rowCount(QModelIndex());
+
     _idAliases[idString] = alias;
 
     int rows = rowCount(QModelIndex());
     if (rows > 0)
     {
-        QModelIndex topLeft = index(0, column_name, QModelIndex());
-        QModelIndex bottomRight = index(rows - 1, column_name, QModelIndex());
-        emit dataChanged(topLeft, bottomRight, { Qt::DisplayRole });
-    }
-}
+        QModelIndex topLeft     = index(0, 0, QModelIndex());
+        QModelIndex bottomRight = index(rows - 1, column_count - 1, QModelIndex());
 
-void BaseTraceViewModel::setMessageColorForIdString(const QString &idString,
-                                                    const QColor &color)
-{
-    _idColors.insert(idString, color);
-
-    int rows = rowCount(QModelIndex());
-    if (rows <= 0)
-    {
-        return;
+        emit dataChanged(topLeft, bottomRight,
+            { Qt::DisplayRole });
     }
 
-    QModelIndex topLeft = index(0, 0, QModelIndex());
-    QModelIndex bottomRight = index(rows - 1, column_count - 1, QModelIndex());
-    emit dataChanged(topLeft, bottomRight, {Qt::ForegroundRole});
+    // qDebug() << "[BaseTraceViewModel" << this
+    //          << "] aliases now:" << _idAliases;
 }
 
 QColor BaseTraceViewModel::messageColorForIdString(const QString &idString) const
@@ -556,4 +556,18 @@ void BaseTraceViewModel::setCommentForMessage(int msgId, const QString &c)
 {
     _perMessageComment[msgId] = c;
 }
+void BaseTraceViewModel::setMessageColorForIdString(const QString &idString,
+                                                    const QColor &color)
+{
+    _idColors[idString] = color;
 
+    int rows = rowCount(QModelIndex());
+    if (rows > 0)
+    {
+        QModelIndex topLeft     = index(0, 0, QModelIndex());
+        QModelIndex bottomRight = index(rows - 1, column_count - 1, QModelIndex());
+
+        emit dataChanged(topLeft, bottomRight,
+                         { Qt::ForegroundRole, Qt::BackgroundRole });
+    }
+}
