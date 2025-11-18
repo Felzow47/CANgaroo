@@ -68,7 +68,7 @@ void TxGeneratorWindow::on_treeWidget_itemClicked(QTreeWidgetItem *item, int col
 
 void TxGeneratorWindow::on_btnAdd_released()
 {
-      qDebug() << "[TxGeneratorWindow] on_btnAdd_released() called";
+    //   qDebug() << "[TxGeneratorWindow] on_btnAdd_released() called";
     MeasurementSetup &setup = _backend.getSetup();
 
     foreach (MeasurementNetwork *network, setup.getNetworks())

@@ -368,12 +368,12 @@ void RawTxWindow::changeRepeatRate(int ms)
 
 void RawTxWindow::sendRepeatMessage(bool enable)
 {
-    qDebug() << "[RawTxWindow] sendRepeatMessage enable=" << enable;
+    // qDebug() << "[RawTxWindow] sendRepeatMessage enable=" << enable;
 
     if (enable)
     {
         reflash_can_msg();
-        qDebug() << "  Starting repeat with rate=" << ui->spinBox_RepeatRate->value();
+        // qDebug() << "  Starting repeat with rate=" << ui->spinBox_RepeatRate->value();
 
         char outmsg[256];
         _intf = _backend.getInterfaceById((CanInterfaceId)ui->comboBoxInterface->currentData().toUInt());
@@ -398,14 +398,17 @@ void RawTxWindow::sendRepeatMessage(bool enable)
 
 void RawTxWindow::repeatmsg_timer_timeout()
 {
-    qDebug() << "[RawTxWindow] repeatmsg_timer_timeout() ENTER";
+    // qDebug() << "[RawTxWindow] repeatmsg_timer_timeout() ENTER";
     if (!_intf->isOpen())
     {
-        qDebug() << "  ERROR: _intf == NULL";
+        // qDebug() << "  ERROR: _intf == NULL";
         log_error(_intf->getName() + " not Open!");
         return;
     }
-    qDebug() << "  Interface:" << _intf->getName() << "isOpen=" << _intf->isOpen();
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    _can_msg.setTimestamp(tv);
+    // qDebug() << "  Interface:" << _intf->getName() << "isOpen=" << _intf->isOpen();
     _intf->sendMessage(_can_msg);
     if (ui->checkBox_Display_TX->isChecked())
     {
@@ -413,9 +416,9 @@ void RawTxWindow::repeatmsg_timer_timeout()
         _can_msg.setShow(true);
         _backend.getTrace()->enqueueMessage(_can_msg);
     }
-    qDebug() << "  Sending periodic CAN frame id=" << Qt::hex << _can_msg.getId()
-             << "len=" << _can_msg.getLength()
-             << "data=" << _can_msg.getDataHexString();
+    // qDebug() << "  Sending periodic CAN frame id=" << Qt::hex << _can_msg.getId()
+    //          << "len=" << _can_msg.getLength()
+    //          << "data=" << _can_msg.getDataHexString();
 }
 
 void RawTxWindow::disableTxWindow(int disable)
