@@ -57,6 +57,7 @@ public:
     virtual bool saveXML(Backend &backend, QDomDocument &xml, QDomElement &root);
     virtual bool loadXML(Backend &backend, QDomElement &el);
     LinearTraceViewModel *linearModel() const { return _linearTraceViewModel; }
+    AggregatedTraceViewModel* aggregatedModel() const{return _aggregatedTraceViewModel;}
 
 public slots:
     void rowsInserted(const QModelIndex &parent, int first, int last);
@@ -83,5 +84,6 @@ private:
     LinearTraceViewModel *_linearTraceViewModel;
     AggregatedTraceViewModel *_aggregatedTraceViewModel;
     QSortFilterProxyModel *_aggregatedProxyModel;
+
     QSortFilterProxyModel *_linearProxyModel;
 };

@@ -43,6 +43,7 @@
 #include <driver/GrIPDriver/GrIPDriver.h>
 #include <driver/CANBlastDriver/CANBlasterDriver.h>
 #include <window/TraceWindow/LinearTraceViewModel.h>
+#include "window/TraceWindow/AggregatedTraceViewModel.h"
 
 #if defined(__linux__)
 #include <driver/SocketCanDriver/SocketCanDriver.h>
@@ -667,19 +668,17 @@ void MainWindow::switchLanguage(QAction *action)
         QString qmPath = ":/translations/i18n_" + locale + ".qm";
         if (!m_translator.load(qmPath))
         {
-          //todo: launch error
+            // todo: launch error
         }
     }
 
     qApp->installTranslator(&m_translator);
 }
 
-
 void MainWindow::changeEvent(QEvent *event)
 {
     if (event->type() == QEvent::LanguageChange)
     {
-       
 
         ui->retranslateUi(this);
 
@@ -706,8 +705,6 @@ void MainWindow::createLanguageMenu()
     actionEn->setData("en_US");
     m_languageMenu->addAction(actionEn);
     m_languageActionGroup->addAction(actionEn);
-
-
 
     QAction *actionEs = new QAction(tr("Español"), this);
     actionEs->setCheckable(true);
@@ -790,6 +787,8 @@ void MainWindow::exportFullTrace()
     file.close();
 }
 
+
+
 void MainWindow::importFullTrace()
 {
     TraceWindow *tw = currentTab()->findChild<TraceWindow *>();
@@ -799,14 +798,15 @@ void MainWindow::importFullTrace()
         return;
     }
 
-    auto *model = tw->linearModel();
+    auto *linear = tw->linearModel();
+    auto *agg    = tw->aggregatedModel();
 
     QString filename = QFileDialog::getOpenFileName(
         this,
         tr("Import full trace"),
         "",
-        tr("CANgaroo Trace (*.ctrace)"));
-
+        tr("CANgaroo Trace (*.ctrace)")
+    );
     if (filename.isEmpty())
         return;
 
@@ -819,21 +819,45 @@ void MainWindow::importFullTrace()
 
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     file.close();
-
     QJsonObject root = doc.object();
 
     backend().clearTrace();
 
+
+    {
+        QJsonObject colors = root["colors"].toObject();
+        for (auto it = colors.begin(); it != colors.end(); ++it)
+        {
+            QColor c(it.value().toString());
+
+            linear->setMessageColorForIdString(it.key(), c);
+            agg->setMessageColorForIdString(it.key(), c);
+        }
+    }
+
+ 
+    {
+        QJsonObject aliases = root["aliases"].toObject();
+        for (auto it = aliases.begin(); it != aliases.end(); ++it)
+        {
+            QString alias = it.value().toString();
+
+            linear->updateAliasForIdString(it.key(), alias);
+            agg->updateAliasForIdString(it.key(), alias);
+        }
+    }
+
+
     QJsonArray msgs = root["messages"].toArray();
+
     for (int i = 0; i < msgs.size(); i++)
     {
         QJsonObject m = msgs[i].toObject();
-
         CanMessage msg;
 
         double ts = m["timestamp"].toDouble();
         struct timeval tv;
-        tv.tv_sec = (time_t)ts;
+        tv.tv_sec  = (time_t)ts;
         tv.tv_usec = (ts - tv.tv_sec) * 1e6;
         msg.setTimestamp(tv);
 
@@ -848,14 +872,18 @@ void MainWindow::importFullTrace()
 
         backend().getTrace()->enqueueMessage(msg, false);
 
-        model->setCommentForMessage(i, m["comment"].toString());
+        QString comment = m["comment"].toString();
+        if (!comment.isEmpty())
+        {
+            linear->setCommentForMessage(i, comment);
+            agg->setCommentForMessage(i, comment);
+        }
     }
 
-    QJsonObject colors = root["colors"].toObject();
-    for (auto it = colors.begin(); it != colors.end(); ++it)
-        model->setMessageColorForIdString(it.key(), QColor(it.value().toString()));
 
-    QJsonObject aliases = root["aliases"].toObject();
-    for (auto it = aliases.begin(); it != aliases.end(); ++it)
-        model->updateAliasForIdString(it.key(), it.value().toString());
+    QMetaObject::invokeMethod(linear, "modelReset", Qt::DirectConnection);
+    QMetaObject::invokeMethod(agg,    "modelReset", Qt::DirectConnection);
+
+    linear->layoutChanged();
+    agg->layoutChanged();
 }

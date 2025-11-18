@@ -178,6 +178,9 @@ QVariant LinearTraceViewModel::data(const QModelIndex &index, int role) const
 
     return QVariant();
 }
+
+
+
 bool LinearTraceViewModel::setData(const QModelIndex &index,
                                    const QVariant &value,
                                    int role)
@@ -195,11 +198,22 @@ bool LinearTraceViewModel::setData(const QModelIndex &index,
     if (msgId < 0 || msgId >= trace()->size())
         return false;
 
-   
-    if (index.column() == column_name)
-        return BaseTraceViewModel::setData(index, value, Qt::EditRole);
+    const CanMessage *msg = trace()->getMessage(msgId);
+    if (!msg)
+        return false;
 
- 
+
+    if (index.column() == column_name)
+    {
+        QString alias = text;
+        QString idString = msg->getIdString();
+
+        updateAliasForIdString(idString, alias);
+
+        emit dataChanged(index, index, { Qt::DisplayRole });
+        return true;
+    }
+
     if (index.column() == column_comment)
     {
         setCommentForMessage(msgId, text);

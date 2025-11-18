@@ -31,6 +31,7 @@ Further development by:
   * qmake6
   * make
   * make install
+* For Debian/Ubuntu users, can go to Releases and download .deb*
 
 ## Building on Windows
 * Qt Creator (Community Version is okay) brings everything you need

@@ -101,6 +101,7 @@ public:
     {
         _perMessageComment = comments;
     }
+ 
 
 protected:
     virtual QVariant data_DisplayRole(const QModelIndex &index, int role) const;

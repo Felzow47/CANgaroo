@@ -232,7 +232,14 @@ QVariant BaseTraceViewModel::data_DisplayRole_Message(const QModelIndex &index, 
         return currentMsg.getIdString();
 
     case column_name:
-        return (dbmsg) ? dbmsg->getName() : "";
+    {
+        QString id = currentMsg.getIdString();
+        QString alias = _idAliases.value(id);
+        if (!alias.isEmpty())
+            return alias;
+
+        return QString();
+    }
 
     case column_sender:
     {
@@ -363,11 +370,13 @@ QVariant BaseTraceViewModel::data_TextColorRole(const QModelIndex &index, int ro
 {
     (void)role;
 
-    if (!index.isValid()) {
+    if (!index.isValid())
+    {
         return QVariant();
     }
 
-    if (index.parent().isValid()) {
+    if (index.parent().isValid())
+    {
         return QVariant();
     }
 
@@ -375,16 +384,17 @@ QVariant BaseTraceViewModel::data_TextColorRole(const QModelIndex &index, int ro
                                       column_canid,
                                       index.parent());
     QString idString = idIndex.data(Qt::DisplayRole).toString();
-    if (idString.isEmpty()) {
+    if (idString.isEmpty())
+    {
         return QVariant();
     }
 
     auto it = _idColors.constFind(idString);
-    if (it == _idColors.constEnd()) {
+    if (it == _idColors.constEnd())
+    {
         return QVariant();
     }
 
-   
     return *it;
 }
 
@@ -437,7 +447,8 @@ bool BaseTraceViewModel::setData(const QModelIndex &index, const QVariant &value
     }
     quintptr internal = index.internalId();
     int msg_id = (internal & ~0x80000000u) - 1;
-    if (msg_id < 0 || msg_id >= trace()->size()) {
+    if (msg_id < 0 || msg_id >= trace()->size())
+    {
         return false;
     }
 
@@ -478,6 +489,7 @@ bool BaseTraceViewModel::setData(const QModelIndex &index, const QVariant &value
     if (index.column() == column_name)
     {
         dbmsg->setName(value.toString());
+        _idAliases[msg->getIdString()] = value.toString();
     }
     else if (index.column() == column_comment)
     {
@@ -494,61 +506,16 @@ bool BaseTraceViewModel::setData(const QModelIndex &index, const QVariant &value
 
     return true;
 }
-
 void BaseTraceViewModel::updateAliasForIdString(const QString &idString,
                                                 const QString &alias)
 {
-    CanTrace *t = trace();
-    if (!t) {
-        return;
-    }
-
-    const CanMessage *exampleMsg = nullptr;
-    int sz = t->size();
-    for (int i = 0; i < sz; ++i) {
-        const CanMessage *m = t->getMessage(i);
-        if (!m) {
-            continue;
-        }
-        if (m->getIdString() == idString) {
-            exampleMsg = m;
-            break;
-        }
-    }
-
-    if (!exampleMsg) {
-        return;
-    }
-
-    MeasurementNetwork *network = backend()->getSetup().getNetwork(0);
-    if (!network) {
-        return;
-    }
-
-    pCanDb db;
-    if (network->_canDbs.isEmpty()) {
-        db = pCanDb(new CanDb());
-        network->addCanDb(db);
-    } else {
-        db = network->_canDbs.first();
-    }
-
-    CanDbMessage *dbmsg = backend()->findDbMessage(*exampleMsg);
-    if (!dbmsg) {
-        dbmsg = new CanDbMessage(db.data());
-        dbmsg->setRaw_id(exampleMsg->getRawId());
-        dbmsg->setDlc(exampleMsg->getLength());
-        db->addMessage(dbmsg);
-    }
-
-    dbmsg->setName(alias);
+    _idAliases[idString] = alias;
 
     int rows = rowCount(QModelIndex());
-    if (rows > 0) {
-        QModelIndex topLeft =
-            index(0, column_name, QModelIndex());
-        QModelIndex bottomRight =
-            index(rows - 1, column_name, QModelIndex());
+    if (rows > 0)
+    {
+        QModelIndex topLeft = index(0, column_name, QModelIndex());
+        QModelIndex bottomRight = index(rows - 1, column_name, QModelIndex());
         emit dataChanged(topLeft, bottomRight, { Qt::DisplayRole });
     }
 }
@@ -559,13 +526,14 @@ void BaseTraceViewModel::setMessageColorForIdString(const QString &idString,
     _idColors.insert(idString, color);
 
     int rows = rowCount(QModelIndex());
-    if (rows <= 0) {
+    if (rows <= 0)
+    {
         return;
     }
 
     QModelIndex topLeft = index(0, 0, QModelIndex());
     QModelIndex bottomRight = index(rows - 1, column_count - 1, QModelIndex());
-    emit dataChanged(topLeft, bottomRight, { Qt::ForegroundRole });
+    emit dataChanged(topLeft, bottomRight, {Qt::ForegroundRole});
 }
 
 QColor BaseTraceViewModel::messageColorForIdString(const QString &idString) const
@@ -588,3 +556,4 @@ void BaseTraceViewModel::setCommentForMessage(int msgId, const QString &c)
 {
     _perMessageComment[msgId] = c;
 }
+
