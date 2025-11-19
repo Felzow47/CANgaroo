@@ -27,6 +27,12 @@
 #include <core/Backend.h>
 #include <driver/CanInterface.h>
 #include <core/CanTrace.h>
+#include <QVBoxLayout>
+
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QSpinBox>
+#include <QPushButton>
 
 RawTxWindow::RawTxWindow(QWidget *parent, Backend &backend) : ConfigurableWidget(parent),
                                                               ui(new Ui::RawTxWindow),
@@ -482,9 +488,9 @@ void RawTxWindow::refreshInterfaces()
 
 void RawTxWindow::reflash_can_msg()
 {
-    qDebug() << "[RawTxWindow] reflash_can_msg() id="
-             << ui->fieldAddress->text()
-             << "dlc=" << ui->comboBoxDLC->currentData().toUInt();
+    // qDebug() << "[RawTxWindow] reflash_can_msg() id="
+    //          << ui->fieldAddress->text()
+    //          << "dlc=" << ui->comboBoxDLC->currentData().toUInt();
 
     bool en_extended = ui->checkBox_IsExtended->isChecked();
     bool en_rtr = ui->checkBox_IsRTR->isChecked();
@@ -617,7 +623,7 @@ void RawTxWindow::reflash_can_msg()
 
 void RawTxWindow::sendRawMessage()
 {
-    qDebug() << "[RawTxWindow] sendRawMessage() ENTER";
+    // qDebug() << "[RawTxWindow] sendRawMessage() ENTER";
     reflash_can_msg();
 
     CanInterface *intf = _backend.getInterfaceById((CanInterfaceId)ui->comboBoxInterface->currentData().toUInt());
@@ -626,7 +632,7 @@ void RawTxWindow::sendRawMessage()
         log_error(intf->getName() + " not Open!");
         return;
     }
-    qDebug() << "  Interface:" << intf->getName() << "isOpen=" << intf->isOpen();
+    // qDebug() << "  Interface:" << intf->getName() << "isOpen=" << intf->isOpen();
 
     _can_msg.setInterfaceId(intf->getId());
     intf->sendMessage(_can_msg);
@@ -637,9 +643,9 @@ void RawTxWindow::sendRawMessage()
         _can_msg.setShow(true);
         _backend.getTrace()->enqueueMessage(_can_msg);
     }
-    qDebug() << "  Sending CAN frame id=" << Qt::hex << _can_msg.getId()
-             << "len=" << _can_msg.getLength()
-             << "data=" << _can_msg.getDataHexString();
+    // qDebug() << "  Sending CAN frame id=" << Qt::hex << _can_msg.getId()
+    //          << "len=" << _can_msg.getLength()
+    //          << "data=" << _can_msg.getDataHexString();
 
     char outmsg[256];
     snprintf(outmsg, 256, "Send [%s] to %d on port %s [ext=%u rtr=%u err=%u fd=%u brs=%u]",
@@ -860,4 +866,132 @@ void RawTxWindow::fieldAddress_textChanged(QString str)
     {
         ui->checkBox_IsExtended->setChecked(false);
     }
+}
+void RawTxWindow::setDialogMode(bool en)
+{
+  
+
+    if (_dialogMode == en) {
+ 
+        return;
+    }
+
+    _dialogMode = en;
+
+    if (en)
+    {
+       
+
+        ui->singleSendButton->hide();
+        ui->repeatSendButton->hide();
+        ui->comboBoxInterface->hide();
+        ui->label_12->hide();
+        ui->label_3->hide();
+        ui->checkBox_Display_TX->hide();
+
+      
+        QRect byteGeom = ui->fieldByte0_0->geometry();
+        int spinY = byteGeom.y();         
+        int spinX = ui->spinBox_RepeatRate->geometry().x()-50;
+
+
+        ui->spinBox_RepeatRate->setGeometry(spinX, spinY, 80, 24);
+        ui->spinBox_RepeatRate->show();
+
+       
+        int msX = spinX + 85;
+        ui->label_11->setGeometry(msX, spinY, 31, 26);
+        ui->label_11->show();
+
+
+    }
+    else
+    {
+       
+        ui->singleSendButton->show();
+        ui->repeatSendButton->show();
+        ui->comboBoxInterface->show();
+        ui->label_12->show();
+        ui->label_3->show();
+        ui->checkBox_Display_TX->show();
+
+        ui->spinBox_RepeatRate->setGeometry(600, 10, 61, 26);
+        ui->spinBox_RepeatRate->show();
+
+        ui->label_11->setGeometry(667, 10, 31, 26);
+        ui->label_11->show();
+    }
+
+  
+}
+
+
+void RawTxWindow::setTaskEditMode(bool en)
+{
+    
+    if (_dialogMode) {
+     
+        return;
+    }
+
+    if (en)
+    {
+   
+        ui->singleSendButton->hide();
+        ui->repeatSendButton->hide();
+        ui->checkBox_Display_TX->hide();
+
+        if (ui->comboBoxInterface)
+            ui->comboBoxInterface->hide();
+        if (ui->label_12)
+            ui->label_12->hide();
+
+        if (ui->label_11)
+            ui->label_11->setText("ms");
+        if (ui->spinBox_RepeatRate)
+            ui->spinBox_RepeatRate->show();
+    }
+    else
+    {
+      
+
+        ui->singleSendButton->show();
+        ui->repeatSendButton->show();
+        ui->checkBox_Display_TX->show();
+
+        if (ui->comboBoxInterface)
+            ui->comboBoxInterface->show();
+        if (ui->label_12)
+            ui->label_12->show();
+
+        if (ui->label_11)
+            ui->label_11->setText("ms");
+        if (ui->spinBox_RepeatRate)
+            ui->spinBox_RepeatRate->show();
+    }
+}
+
+
+
+
+void RawTxWindow::getCurrentMessage(CanMessage &out)
+{
+
+    reflash_can_msg();
+
+    CanInterface *intf = _backend.getInterfaceById(
+        (CanInterfaceId)ui->comboBoxInterface->currentData().toUInt());
+    if (intf && intf->isOpen())
+    {
+        _can_msg.setInterfaceId(intf->getId());
+    }
+
+    out = _can_msg;
+}
+
+
+
+int RawTxWindow::getPeriodMs() const
+{
+    return ui->spinBox_RepeatRate->value();
 }

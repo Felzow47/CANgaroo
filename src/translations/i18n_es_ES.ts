@@ -1117,42 +1117,42 @@
         <translation>Filtro: </translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="91"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="83"/>
         <source>Absolute</source>
         <translation>Absoluto</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="92"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="84"/>
         <source>Relative</source>
         <translation>Relativo</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="93"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="85"/>
         <source>Delta</source>
         <translation>Delta</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="513"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="505"/>
         <source>Edit alias, color and comment</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="514"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="506"/>
         <source>Choose alias and color</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="526"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="518"/>
         <source>Choose color</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="549"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="541"/>
         <source>Select color for %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="564"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="556"/>
         <source>Comment:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1165,7 +1165,7 @@
         <translation type="vanished">Editar alias y color</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="520"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="512"/>
         <source>Alias:</source>
         <translation>Alias:</translation>
     </message>
@@ -1174,7 +1174,7 @@
         <translation type="vanished">Elegir color</translation>
     </message>
     <message>
-        <location filename="../window/TraceWindow/TraceWindow.cpp" line="542"/>
+        <location filename="../window/TraceWindow/TraceWindow.cpp" line="534"/>
         <source>Color:</source>
         <translation>Color:</translation>
     </message>
@@ -1195,7 +1195,12 @@
         <translation>Generador</translation>
     </message>
     <message>
-        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.ui" line="72"/>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.ui" line="54"/>
+        <source>Cycle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.ui" line="70"/>
         <source>Add</source>
         <translation>Añadir</translation>
     </message>
@@ -1205,19 +1210,36 @@
         <translation>Eliminar</translation>
     </message>
     <message>
-        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.cpp" line="18"/>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.ui" line="106"/>
+        <source>Enable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.ui" line="124"/>
+        <source>Disable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.ui" line="44"/>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.cpp" line="52"/>
         <source>Nr</source>
         <translation>Nº</translation>
     </message>
     <message>
-        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.cpp" line="18"/>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.ui" line="49"/>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.cpp" line="52"/>
         <source>Name</source>
         <translation>Nombre</translation>
     </message>
     <message>
-        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.cpp" line="18"/>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.cpp" line="52"/>
         <source>Cycle Time</source>
         <translation>Tiempo de Ciclo</translation>
+    </message>
+    <message>
+        <location filename="../window/TxGeneratorWindow/TxGeneratorWindow.cpp" line="183"/>
+        <source>Add periodic CAN message</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

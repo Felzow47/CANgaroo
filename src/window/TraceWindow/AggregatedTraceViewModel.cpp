@@ -342,22 +342,22 @@ QVariant AggregatedTraceViewModel::data_TextColorRole(const QModelIndex &index, 
 
 void AggregatedTraceViewModel::updateAliasForId(const QString &idString, const QString &alias)
 {
-    // Actualizar el hash global
+   
     _idAliases[idString] = alias;
     
-    // Buscar el item específico en el mapa
+   
     for (auto it = _map.begin(); it != _map.end(); ++it)
     {
         AggregatedTraceViewItem *item = it.value();
         if (item && item->_lastmsg.getIdString() == idString)
         {
-            // Encontramos el item, emitir dataChanged solo para esta fila
+         
             int row = item->row();
             QModelIndex topLeft = createIndex(row, 0, item);
             QModelIndex bottomRight = createIndex(row, column_count - 1, item);
             
             emit dataChanged(topLeft, bottomRight, { Qt::DisplayRole });
-            break;  // Solo hay un item por ID único
+            break;  
         }
     }
 }

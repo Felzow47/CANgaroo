@@ -1,3 +1,5 @@
+
+
 /*
 
   Copyright (c) 2024 Schildkroet
@@ -26,14 +28,13 @@
 #include <QList>
 #include <QTreeWidgetItem>
 
-
-namespace Ui {
-class TxGeneratorWindow;
+namespace Ui
+{
+    class TxGeneratorWindow;
 }
 
 class QDomDocument;
 class QDomElement;
-
 
 class TxGeneratorWindow : public ConfigurableWidget
 {
@@ -45,7 +46,8 @@ public:
     virtual bool saveXML(Backend &backend, QDomDocument &xml, QDomElement &root);
     virtual bool loadXML(Backend &backend, QDomElement &el);
 
-    enum {
+    enum
+    {
         column_nr = 0,
         column_name,
         column_cycletime,
@@ -58,19 +60,22 @@ private slots:
     void on_treeWidget_itemClicked(QTreeWidgetItem *item, int column);
 
     void on_btnAdd_released();
+    void on_btnRemove_released();
+    void on_btnEnable_released();
+    void on_btnDisable_released();
+
+protected:
+    struct TxTask
+    {
+        CanMessage msg;
+        int period_ms;
+        qint64 last_sent;
+        bool enabled=true;
+    };
+    QList<TxTask> _tasks;
 
 private:
     Ui::TxGeneratorWindow *ui;
     Backend &_backend;
     QTimer *_SendTimer;
-    //QTimer *sendstate_timer;
-
-    QList<CanMessage> _CanMsgList;
-    //CanInterface *_intf;
-
-    //void hideFDFields();
-    //void showFDFields();
-
-    //void reflash_can_msg(void);
 };
-

@@ -39,17 +39,9 @@
 #include <QPushButton>
 #include <QDebug>   
 #include <QFrame>
+#include "helpers/apphelpers.h"
+using namespace AppHelpers;
 
-static QColor toPastel(const QColor &c)
-{
-
-    int r = (c.red() + 255) / 2;
-    int g = (c.green() + 255) / 2;
-    int b = (c.blue() + 255) / 2;
-    QColor pastel;
-    pastel.setRgb(r, g, b);
-    return pastel;
-}
 
 TraceWindow::TraceWindow(QWidget *parent, Backend &backend) : ConfigurableWidget(parent),
                                                               ui(new Ui::TraceWindow),
