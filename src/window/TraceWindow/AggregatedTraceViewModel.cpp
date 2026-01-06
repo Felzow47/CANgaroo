@@ -319,8 +319,8 @@ QVariant AggregatedTraceViewModel::data_TextColorRole(const QModelIndex &index, 
         struct timeval now;
         gettimeofday(&now, 0);
         int gray = getTimeDiff(item->_lastmsg.getTimestamp(), now) * 100;
-        if (gray > 200)
-            gray = 200;
+        if (gray > 180)
+            gray = 180;
         if (gray < 0)
             gray = 0;
 
