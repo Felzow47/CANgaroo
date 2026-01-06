@@ -76,7 +76,7 @@ and import/export capabilities.
 * Custom color override via color picker.
 * Colors persisted in `.ctrace`.
 
-#### New: Add language options menú and Spanish translate
+#### New: Add language options menu and Spanish translate
 * Added `i18n_es_ES`
 * Full UI retranslation on `LanguageChange`.
 * Menu entry for language selection.
