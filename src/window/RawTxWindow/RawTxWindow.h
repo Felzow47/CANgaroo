@@ -24,9 +24,15 @@
 #include <core/Backend.h>
 #include <core/ConfigurableWidget.h>
 #include <core/MeasurementSetup.h>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QSpinBox>
+#include <QLabel>
+#include <QPushButton>
 
-namespace Ui {
-class RawTxWindow;
+namespace Ui
+{
+    class RawTxWindow;
 }
 
 class QDomDocument;
@@ -42,14 +48,20 @@ public:
 
     virtual bool saveXML(Backend &backend, QDomDocument &xml, QDomElement &root);
     virtual bool loadXML(Backend &backend, QDomElement &el);
+    void setDialogMode(bool en);
+    void getCurrentMessage(CanMessage &out);
+    void setTaskEditMode(bool en);
+    int getPeriodMs() const;
 
+
+public slots:
+    void refreshInterfaces();
 private slots:
     void changeDLC();
     void updateCapabilities();
     void changeRepeatRate(int ms);
     void sendRepeatMessage(bool enable);
     void disableTxWindow(int disable);
-    void refreshInterfaces();
     void sendRawMessage();
 
     void fieldAddress_textChanged(QString str);
@@ -57,7 +69,9 @@ private slots:
     void sendstate_timer_timeout();
 
     void repeatmsg_timer_timeout();
-
+signals:
+    void dialogAccepted();
+    void dialogRejected();
 
 private:
     Ui::RawTxWindow *ui;
@@ -72,5 +86,7 @@ private:
     void showFDFields();
 
     void reflash_can_msg(void);
-
+    bool _dialogMode = false;
+   
+    QVector<QPushButton*> dialogButtons;
 };

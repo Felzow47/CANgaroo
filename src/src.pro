@@ -14,7 +14,8 @@ CONFIG += link_pkgconfig
 TRANSLATIONS = \
     translations/cangaroo_de_DE.ts \
     translations/i18n_en_us.ts \
-    translations/i18n_zh_cn.ts
+    translations/i18n_zh_cn.ts \
+    translations/i18n_es_ES.ts
 RC_ICONS = cangaroo.ico
 
 DESTDIR = ../bin
@@ -45,6 +46,7 @@ include($$PWD/window/GraphWindow/GraphWindow.pri)
 include($$PWD/window/CanStatusWindow/CanStatusWindow.pri)
 include($$PWD/window/RawTxWindow/RawTxWindow.pri)
 include($$PWD/window/TxGeneratorWindow/TxGeneratorWindow.pri)
+include($$PWD/helpers/helpers.pri)
 
 
 unix:PKGCONFIG += libnl-3.0
