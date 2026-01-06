@@ -46,7 +46,7 @@ TxGeneratorWindow::TxGeneratorWindow(QWidget *parent, Backend &backend)
 {
     ui->setupUi(this);
 
-    ui->treeWidget->setHeaderLabels(QStringList() << tr("Nr") << tr("Name") << tr("Cycle Time"));
+    ui->treeWidget->setHeaderLabels(QStringList() << tr("Nr") << tr("Name") << tr("Cycle Time") << tr("Channel"));
     ui->treeWidget->setColumnWidth(0, 40);
     ui->treeWidget->setColumnWidth(1, 160);
 
@@ -88,6 +88,7 @@ bool TxGeneratorWindow::loadXML(Backend &backend, QDomElement &el)
     }
     return true;
 }
+
 void TxGeneratorWindow::SendTimer_timeout()
 {
     if (_tasks.isEmpty())
@@ -154,6 +155,7 @@ void TxGeneratorWindow::update()
 
     this->setDisabled(!anyOpen);
 }
+
 void TxGeneratorWindow::on_treeWidget_itemClicked(QTreeWidgetItem *item, int column)
 {
     Q_UNUSED(column);
@@ -222,6 +224,7 @@ void TxGeneratorWindow::on_btnAdd_released()
     item->setText(column_nr, QString::number(_tasks.count()));
     item->setText(column_name, msg.getDataHexString());
     item->setText(column_cycletime, QString::number(period));
+    item->setText(column_channel, _backend.getInterfaceName(msg.getInterfaceId()));
     ui->treeWidget->addTopLevelItem(item);
     setRowColor(item, true);
     if (ui->btnRemove)

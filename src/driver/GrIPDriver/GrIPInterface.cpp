@@ -125,7 +125,7 @@ QList<CanTiming> GrIPInterface::getAvailableBitrates()
 
     if(_manufacturer == GrIPInterface::CANIL)
     {
-        bitrates.append({10000, 20000, 50000, 83333, 100000, 125000, 250000, 500000, 800000, 1000000});
+        bitrates.append({10000, 20000, 50000, 100000, 125000, 250000, 500000, 800000, 1000000});
         bitrates_fd.append({2000000, 5000000});
         samplePoints.append({875});
         samplePoints_fd.append({750});
@@ -134,7 +134,7 @@ QList<CanTiming> GrIPInterface::getAvailableBitrates()
     {
     }*/
 
-    unsigned i=0;
+    unsigned i = 0;
     foreach (unsigned br, bitrates)
     {
         foreach(unsigned br_fd, bitrates_fd)
@@ -318,34 +318,12 @@ void GrIPInterface::open()
     }
 
     // Close CAN port
-    /*_serport->write("C\r", 2);
-    _serport->flush();
-    _serport->waitForBytesWritten(100);
-    _serport->waitForReadyRead(50);*/
+    m_GrIPHandler->EnableChannel(_idx, false);
 
-    // Get Version
-    /*_serport->clear(QSerialPort::Input);
-    _serport->write("V\r", 2);
-    _serport->flush();
-    _serport->waitForBytesWritten(100);*/
-    /*if(_serport->waitForReadyRead(50))
-    {
-        qApp->processEvents();
-
-        if(_serport->bytesAvailable())
-        {
-            // This is called when readyRead() is emitted
-            QByteArray datas = _serport->readLine();
-            _version = QString(datas).trimmed();
-        }
-    }*/
-
-    /*if(_settings.isCustomBitrate())
+    if(_settings.isCustomBitrate())
     {
         QString _custombitrate = QString("%1").arg(_settings.customBitrate(), 6, 16,QLatin1Char('0')).toUpper();
-        std::string _custombitrate_std= 'S' + _custombitrate.toStdString() + '\r';
-        _serport->write(_custombitrate_std.c_str(), _custombitrate_std.length());
-        _serport->flush();
+        m_GrIPHandler->CAN_SetBaudrate(_idx, _custombitrate.toInt());
     }
     else
     {
@@ -353,73 +331,43 @@ void GrIPInterface::open()
         switch(_settings.bitrate())
         {
             case 1000000:
-                _serport->write("S8\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 1000000);
                 break;
             case 800000:
-                _serport->write("S7\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 800000);
                 break;
             case 500000:
-                _serport->write("S6\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 500000);
                 break;
             case 250000:
-                _serport->write("S5\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 250000);
                 break;
             case 125000:
-                _serport->write("S4\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 125000);
                 break;
             case 100000:
-                _serport->write("S3\r", 3);
-                _serport->flush();
-                break;
-            case 83333:
-                _serport->write("S9\r", 3);
-                _serport->flush();
-                break;
-            case 75000:
-                _serport->write("SA\r", 3);
-                _serport->flush();
-                break;
-            case 62500:
-                _serport->write("SB\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 100000);
                 break;
             case 50000:
-                _serport->write("S2\r", 3);
-                _serport->flush();
-                break;
-            case 33333:
-                _serport->write("SC\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 50000);
                 break;
             case 20000:
-                _serport->write("S1\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 20000);
                 break;
             case 10000:
-                _serport->write("S0\r", 3);
-                _serport->flush();
-                break;
-            case 5000:
-                _serport->write("SD\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 10000);
                 break;
             default:
                 // Default to 10k
-                _serport->write("S0\r", 3);
-                _serport->flush();
+                m_GrIPHandler->CAN_SetBaudrate(_idx, 10000);
                 break;
         }
     }
 
-    _serport->waitForBytesWritten(200);
+    //_serport->waitForBytesWritten(20);
 
     // Set configured BRS rate
-    if(_config.supports_canfd)
+    /*if(_config.supports_canfd)
     {
         if(_settings.isCustomFdBitrate())
         {
@@ -455,10 +403,10 @@ void GrIPInterface::open()
             }
         }
     }
-    _serport->waitForBytesWritten(100);
+    _serport->waitForBytesWritten(20);*/
 
     // Set Listen Only Mode
-    if(_settings.isListenOnlyMode())
+    /*if(_settings.isListenOnlyMode())
     {
         _serport->write("M1\r", 3);
         _serport->flush();
@@ -473,19 +421,9 @@ void GrIPInterface::open()
     // Open the port
     _serport->write("O\r", 2);
     _serport->flush();
-    _serport->waitForBytesWritten(100);
+    _serport->waitForBytesWritten(100);*/
 
-    // Clear serial port receiver
-    if(_serport->waitForReadyRead(10))
-    {
-        qApp->processEvents();
-
-        if(_serport->bytesAvailable())
-        {
-            // This is called when readyRead() is emitted
-            _serport->readAll();
-        }
-    }*/
+    m_GrIPHandler->SetStatus(true);
 
     m_GrIPHandler->EnableChannel(_idx, true);
     m_TxFrames.clear();
@@ -499,9 +437,6 @@ void GrIPInterface::open()
     _status.tx_count = 0;
     _status.tx_errors = 0;
     _status.tx_dropped = 0;
-
-    // Release port mutex
-    //_serport_mutex.unlock();
 }
 
 void GrIPInterface::handleSerialError(QSerialPort::SerialPortError error)
@@ -570,6 +505,8 @@ void GrIPInterface::close()
     _status.can_state = state_bus_off;
 
     m_GrIPHandler->EnableChannel(_idx, false);
+
+    m_GrIPHandler->SetStatus(false);
 
     m_TxFrames.clear();
 }

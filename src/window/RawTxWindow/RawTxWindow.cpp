@@ -867,12 +867,11 @@ void RawTxWindow::fieldAddress_textChanged(QString str)
         ui->checkBox_IsExtended->setChecked(false);
     }
 }
+
 void RawTxWindow::setDialogMode(bool en)
 {
-  
-
-    if (_dialogMode == en) {
- 
+    if (_dialogMode == en)
+    {
         return;
     }
 
@@ -880,12 +879,8 @@ void RawTxWindow::setDialogMode(bool en)
 
     if (en)
     {
-       
-
         ui->singleSendButton->hide();
         ui->repeatSendButton->hide();
-        ui->comboBoxInterface->hide();
-        ui->label_12->hide();
         ui->label_3->hide();
         ui->checkBox_Display_TX->hide();
 
@@ -903,15 +898,11 @@ void RawTxWindow::setDialogMode(bool en)
         ui->label_11->setGeometry(msX, spinY, 31, 26);
         ui->label_11->show();
 
-
     }
     else
     {
-       
         ui->singleSendButton->show();
         ui->repeatSendButton->show();
-        ui->comboBoxInterface->show();
-        ui->label_12->show();
         ui->label_3->show();
         ui->checkBox_Display_TX->show();
 
@@ -921,22 +912,17 @@ void RawTxWindow::setDialogMode(bool en)
         ui->label_11->setGeometry(667, 10, 31, 26);
         ui->label_11->show();
     }
-
-  
 }
-
 
 void RawTxWindow::setTaskEditMode(bool en)
 {
-    
-    if (_dialogMode) {
-     
+    if (_dialogMode)
+    {
         return;
     }
 
     if (en)
     {
-   
         ui->singleSendButton->hide();
         ui->repeatSendButton->hide();
         ui->checkBox_Display_TX->hide();
@@ -953,8 +939,6 @@ void RawTxWindow::setTaskEditMode(bool en)
     }
     else
     {
-      
-
         ui->singleSendButton->show();
         ui->repeatSendButton->show();
         ui->checkBox_Display_TX->show();
@@ -971,12 +955,8 @@ void RawTxWindow::setTaskEditMode(bool en)
     }
 }
 
-
-
-
 void RawTxWindow::getCurrentMessage(CanMessage &out)
 {
-
     reflash_can_msg();
 
     CanInterface *intf = _backend.getInterfaceById(
@@ -988,8 +968,6 @@ void RawTxWindow::getCurrentMessage(CanMessage &out)
 
     out = _can_msg;
 }
-
-
 
 int RawTxWindow::getPeriodMs() const
 {

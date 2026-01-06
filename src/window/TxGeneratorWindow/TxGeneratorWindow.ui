@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>480</width>
+    <width>570</width>
     <height>220</height>
    </rect>
   </property>
@@ -19,14 +19,12 @@
   <property name="windowTitle">
    <string>Generator</string>
   </property>
-
-  <!-- Tree -->
   <widget class="QTreeWidget" name="treeWidget">
    <property name="geometry">
     <rect>
      <x>10</x>
      <y>10</y>
-     <width>361</width>
+     <width>441</width>
      <height>201</height>
     </rect>
    </property>
@@ -37,7 +35,7 @@
     <bool>false</bool>
    </property>
    <property name="columnCount">
-    <number>3</number>
+    <number>4</number>
    </property>
    <column>
     <property name="text">
@@ -51,16 +49,19 @@
    </column>
    <column>
     <property name="text">
-     <string>Cycle</string>
+     <string>Cycle Time</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Channel</string>
     </property>
    </column>
   </widget>
-
-  <!-- Add -->
   <widget class="QPushButton" name="btnAdd">
    <property name="geometry">
     <rect>
-     <x>380</x>
+     <x>460</x>
      <y>10</y>
      <width>94</width>
      <height>28</height>
@@ -70,15 +71,13 @@
     <string>Add</string>
    </property>
   </widget>
-
-  <!-- Remove -->
   <widget class="QPushButton" name="btnRemove">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="geometry">
     <rect>
-     <x>380</x>
+     <x>460</x>
      <y>50</y>
      <width>94</width>
      <height>28</height>
@@ -88,15 +87,13 @@
     <string>Remove</string>
    </property>
   </widget>
-
-  <!-- Enable -->
   <widget class="QPushButton" name="btnEnable">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="geometry">
     <rect>
-     <x>380</x>
+     <x>460</x>
      <y>90</y>
      <width>94</width>
      <height>28</height>
@@ -106,15 +103,13 @@
     <string>Enable</string>
    </property>
   </widget>
-
-  <!-- Disable -->
   <widget class="QPushButton" name="btnDisable">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="geometry">
     <rect>
-     <x>380</x>
+     <x>460</x>
      <y>130</y>
      <width>94</width>
      <height>28</height>
@@ -124,7 +119,6 @@
     <string>Disable</string>
    </property>
   </widget>
-
  </widget>
  <resources/>
  <connections/>

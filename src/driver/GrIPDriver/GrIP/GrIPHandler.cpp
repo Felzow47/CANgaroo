@@ -1,5 +1,6 @@
 #include "GrIPHandler.h"
 #include "CRC.h"
+#include "Protocol.h"
 #include <chrono>
 #include <cstring>
 
@@ -16,10 +17,9 @@
 #define SYSTEM_SEND_CAN_FRAME   20u
 
 // CAN Msg flags
-#define CAN_FLAGS_STD_ID            0x01
-#define CAN_FLAGS_EXT_ID            0x02
-#define CAN_FLAGS_FD                0x04
-#define CAN_FLAGS_RTR               0x08
+#define CAN_FLAGS_EXT_ID            0x01
+#define CAN_FLAGS_FD                0x02
+#define CAN_FLAGS_RTR               0x04
 
 
 GrIPHandler::GrIPHandler(const QString &name)
@@ -92,6 +92,22 @@ void GrIPHandler::Stop()
 }
 
 
+void GrIPHandler::SetStatus(bool open)
+{
+    uint8_t arr[2] = {SYSTEM_SET_STATUS, 1};
+    GrIP_Pdu_t p = {arr, 2};
+
+    if(open)
+    {
+        arr[1] = 2;
+    }
+
+    std::unique_lock<std::mutex> lck(m_MutexSerial);
+
+    GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
+}
+
+
 void GrIPHandler::RequestVersion()
 {
     uint8_t msg = SYSTEM_REPORT_INFO;
@@ -112,18 +128,21 @@ void GrIPHandler::RequestVersion()
 
 std::string GrIPHandler::GetVersion() const
 {
+    std::unique_lock<std::mutex> lck(m_MutexData);
     return m_Version;
 }
 
 
 int GrIPHandler::Channels_CAN() const
 {
+    std::unique_lock<std::mutex> lck(m_MutexData);
     return m_ChannelsCAN;
 }
 
 
 int GrIPHandler::Channels_CANFD() const
 {
+    std::unique_lock<std::mutex> lck(m_MutexData);
     return m_ChannelsCANFD;
 }
 
@@ -146,16 +165,40 @@ void GrIPHandler::Send(GrIP_ProtocolType_e ProtType, GrIP_MessageType_e MsgType,
 
 void GrIPHandler::EnableChannel(uint8_t ch, bool enable)
 {
+    uint8_t arr[3] = {SYSTEM_START_CAN, m_Channel_StatusCAN[0], m_Channel_StatusCAN[1]};
+    GrIP_Pdu_t p = {arr, 3};
+
+    if(ch == 0)
+    {
+        arr[1] = (int)enable;
+    }
+    else if(ch == 1)
+    {
+        arr[2] = (int)enable;
+    }
+
     if(ch < m_Channel_StatusCAN.size())
     {
         m_Channel_StatusCAN[ch] = enable;
+
+        std::unique_lock<std::mutex> lck(m_MutexSerial);
+
+        GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
     }
+}
+
+
+void GrIPHandler::CAN_SetBaudrate(uint8_t ch, uint32_t baud)
+{
+    std::unique_lock<std::mutex> lck(m_MutexSerial);
+    Protocol_SendCANCfg(ch, baud);
+    m_SerialPort->waitForBytesWritten(5);
 }
 
 
 bool GrIPHandler::CanAvailable(uint8_t ch) const
 {
-    std::unique_lock<std::mutex> lck(m_MutexCanQueue);
+    std::unique_lock<std::mutex> lck(m_MutexData);
 
     if(m_ReceiveQueue.size() > ch)
     {
@@ -168,7 +211,7 @@ bool GrIPHandler::CanAvailable(uint8_t ch) const
 
 CanMessage GrIPHandler::ReceiveCan(uint8_t ch)
 {
-    std::unique_lock<std::mutex> lck(m_MutexCanQueue);
+    std::unique_lock<std::mutex> lck(m_MutexData);
 
     if(m_ReceiveQueue.size() > ch)
     {
@@ -203,7 +246,7 @@ bool GrIPHandler::CanTransmit(uint8_t ch, const CanMessage &msg)
 
     arr[6] = msg.getLength();
 
-    arr[7] = 0;//can->Flags;
+    arr[7] = 0;
     if(msg.isExtended())
     {
         arr[7] |= CAN_FLAGS_EXT_ID;
@@ -235,6 +278,8 @@ bool GrIPHandler::CanTransmit(uint8_t ch, const CanMessage &msg)
 
 void GrIPHandler::ProcessData(GrIP_Packet_t &packet)
 {
+    std::unique_lock<std::mutex> lck(m_MutexData);
+
     switch(packet.RX_Header.MsgType)
     {
     case MSG_SYSTEM_CMD:
@@ -339,8 +384,6 @@ void GrIPHandler::ProcessData(GrIP_Packet_t &packet)
                 msg.setByte(i, data[i]);
             }
 
-            std::unique_lock<std::mutex> lck(m_MutexCanQueue);
-
             if(m_Channel_StatusCAN[ch])
             {
                 m_ReceiveQueue[ch].push(msg);
@@ -416,6 +459,6 @@ void GrIPHandler::WorkerThread()
             ProcessData(dat);
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }

@@ -45,7 +45,7 @@ void Protocol_SetStatusLED(StatusLedState_e state)
 }
 
 
-void Protocol_SendCANCfg(uint32_t can1_baud, uint32_t can2_baud)
+void Protocol_SendCANCfg(uint8_t channel, uint32_t can_baud)
 {
     uint8_t msg[9] = {};
     GrIP_Pdu_t p = {msg, 9};
@@ -53,15 +53,12 @@ void Protocol_SendCANCfg(uint32_t can1_baud, uint32_t can2_baud)
     // Set cmd
     msg[0] = SYSTEM_SEND_CAN_CFG;
 
-    msg[1] = (can1_baud >> 24) & 0xFF;
-    msg[2] = (can1_baud >> 16) & 0xFF;
-    msg[3] = (can1_baud >> 8) & 0xFF;
-    msg[4] = (can1_baud) & 0xFF;
+    msg[1] = channel;
 
-    msg[5] = (can2_baud >> 24) & 0xFF;
-    msg[6] = (can2_baud >> 16) & 0xFF;
-    msg[7] = (can2_baud >> 8) & 0xFF;
-    msg[8] = (can2_baud) & 0xFF;
+    msg[2] = (can_baud >> 24) & 0xFF;
+    msg[3] = (can_baud >> 16) & 0xFF;
+    msg[4] = (can_baud >> 8) & 0xFF;
+    msg[5] = (can_baud) & 0xFF;
 
     GrIP_Transmit(PROT_GrIP, MSG_SYSTEM_CMD, RET_OK, &p);
 }

@@ -34,6 +34,8 @@ public:
     bool Start();
     void Stop();
 
+    void SetStatus(bool open);
+
     void RequestVersion();
     std::string GetVersion() const;
 
@@ -41,6 +43,9 @@ public:
     int Channels_CANFD() const;
 
     void EnableChannel(uint8_t ch, bool enable);
+
+    void CAN_SetBaudrate(uint8_t ch, uint32_t baud);
+
     bool CanAvailable(uint8_t ch) const;
     CanMessage ReceiveCan(uint8_t ch);
 
@@ -56,6 +61,7 @@ private:
 
     QSerialPort *m_SerialPort;
     mutable std::mutex m_MutexSerial;
+    mutable std::mutex m_MutexData;
 
     std::unique_ptr<std::thread> m_pWorkerThread;
     mutable std::mutex m_MutexCanQueue;

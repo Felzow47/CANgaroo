@@ -51,6 +51,7 @@ public:
         column_nr = 0,
         column_name,
         column_cycletime,
+        column_channel
     };
 
 private slots:

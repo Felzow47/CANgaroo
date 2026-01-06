@@ -53,7 +53,6 @@ public:
     void setTaskEditMode(bool en);
     int getPeriodMs() const;
 
-
 public slots:
     void refreshInterfaces();
 private slots:
