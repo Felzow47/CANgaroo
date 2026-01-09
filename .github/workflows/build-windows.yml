@@ -1,4 +1,4 @@
-# Build CANgaroo on Windows using MSYS2 (MinGW) to install Qt packages, build with qmake, run windeployqt and upload zip.
+# Build CANgaroo on Windows using MSYS2 (MinGW). Uses explicit MSYS2 shell to run pacman.
 name: Build CANgaroo (Windows, MSYS2 + MinGW)
 
 on:
@@ -9,115 +9,118 @@ on:
 jobs:
   build-windows-mingw:
     runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install MSYS2 (chocolatey) and required base tools
+      - name: Install MSYS2 via Chocolatey
         shell: pwsh
         run: |
           choco feature enable -n allowGlobalConfirmation
           choco install -y msys2
           refreshenv
 
-      - name: Update MSYS2 and install Qt (quite large, first run is slow)
-        # use MSYS2 bash to run pacman commands
-        shell: bash
+      - name: Update MSYS2 and install MinGW + Qt (run inside MSYS2 shell)
+        shell: pwsh
         run: |
-          set -e
-          # Ensure msys2 paths
-          export MSYS2_DIR="C:/msys64"
-          export PATH="$MSYS2_DIR/usr/bin:$PATH"
-          echo "MSYS2 root: $MSYS2_DIR"
-          # Update the package DB and core system (may require separate steps)
-          pacman -Syu --noconfirm || true
-          # If pacman -Syu updated the runtime, we need to re-open pacman;
-          # run a second full update to finish upgrades (common pattern)
-          pacman -Syu --noconfirm
-          # Install MinGW-w64 toolchain and Qt6 packages (x86_64)
-          pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-make \
-            mingw-w64-x86_64-qt6 mingw-w64-x86_64-qt6-tools \
-            mingw-w64-x86_64-qt6-serialport mingw-w64-x86_64-qt6-charts \
-            mingw-w64-x86_64-qt6-svg mingw-w64-x86_64-qt6-opengl mingw-w64-x86_64-winpthreads
-          # Note: package names may vary across MSYS2 releases; above are the common names.
-          # Confirm qmake and windeployqt are installed
-          echo "qmake location:" $(which /mingw64/bin/qmake || which qmake || true)
-          /mingw64/bin/qmake -version || true
-          echo "windeployqt location:" $(which /mingw64/bin/windeployqt || true)
+          $msys_bash = 'C:\tools\msys64\usr\bin\bash.exe'
+          if (-not (Test-Path $msys_bash)) {
+            Write-Error "MSYS2 bash not found at $msys_bash"
+            exit 1
+          }
+          # Run updates and install packages inside MSYS2; this can be long.
+          # We run a robust sequence: full DB update then package installs.
+          & $msys_bash -lc '
+            set -e
+            echo "Start MSYS2 update (may restart pacman internally)..."
+            pacman --noconfirm -Syuu || true
+            # run again to finish upgrades
+            pacman --noconfirm -Su
+            echo "Install MinGW toolchain and Qt6 packages (x86_64)..."
+            pacman --noconfirm -S --needed \
+              mingw-w64-x86_64-toolchain mingw-w64-x86_64-make \
+              mingw-w64-x86_64-qt6 mingw-w64-x86_64-qt6-tools \
+              mingw-w64-x86_64-qt6-serialport mingw-w64-x86_64-qt6-charts \
+              mingw-w64-x86_64-qt6-svg mingw-w64-x86_64-qt6-opengl
+            echo "Installed packages, verifying qmake/windeployqt..."
+            /mingw64/bin/qmake -v || true
+            /mingw64/bin/windeployqt --version || true
+          '
 
-      - name: Prepare build dir
-        shell: bash
+      - name: Build with MinGW (qmake + make) inside MSYS2
+        shell: pwsh
         run: |
-          set -e
-          mkdir -p build-mingw
-          cd build-mingw
-          # go back to repo root later when building
-
-      - name: Build with qmake (MinGW)
-        shell: bash
-        run: |
-          set -e
-          # Ensure we use MinGW-w64 qt tools
-          export MSYS2_DIR="C:/msys64"
-          export PATH="/mingw64/bin:$PATH"
-          cd src
-          # Generate Makefile with qmake from MinGW (qmake for Qt6)
-          /mingw64/bin/qmake -o Makefile src.pro || /mingw64/bin/qmake -o Makefile ../src/src.pro || qmake -o Makefile src/src.pro
-          # Build using mingw32-make or make
-          if command -v mingw32-make >/dev/null 2>&1; then
-            mingw32-make -j$(nproc)
-          else
-            make -j$(nproc)
-          fi
+          $msys_bash = 'C:\tools\msys64\usr\bin\bash.exe'
+          & $msys_bash -lc '
+            set -e
+            export PATH=/mingw64/bin:$PATH
+            echo "Working directory: $(pwd)"
+            # qmake needs to be run from repo root and target src/src.pro
+            if [ -f src/src.pro ]; then
+              cd src
+              /mingw64/bin/qmake -o Makefile src.pro
+              if command -v mingw32-make >/dev/null 2>&1; then
+                mingw32-make -j$(nproc)
+              else
+                make -j$(nproc)
+              fi
+              cd ..
+            else
+              echo "src/src.pro not found"
+              exit 1
+            fi
+          '
 
       - name: List produced files (diagnostic)
-        shell: bash
-        run: |
-          set -e
-          echo "---- built binaries listing ----"
-          find . -type f -maxdepth 4 -printf '%p %k KB\n' || true
-
-      - name: Find produced executable (PE detection) and normalize name
         shell: pwsh
-        id: find-exe
         run: |
-          $root = $PWD.Path
-          Write-Host "Searching for PE (MZ) files under $root"
-          $files = Get-ChildItem -Path $root -File -Recurse -ErrorAction SilentlyContinue
-          $pe = @()
-          foreach ($f in $files) {
+          Write-Host "Listing repository files (top levels)"
+          Get-ChildItem -Path . -Recurse -Depth 3 | Sort-Object FullName | Format-Table FullName,Length -AutoSize
+
+      - name: Find produced executable (detect PE header even if no .exe ext) and copy as CANgaroo.exe
+        id: find-exe
+        shell: pwsh
+        run: |
+          Write-Host "Searching for PE files (MZ header)..."
+          $candidates = Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue
+          $peFiles = @()
+          foreach ($f in $candidates) {
             try {
               $fs = [System.IO.File]::Open($f.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
               $b1 = $fs.ReadByte(); $b2 = $fs.ReadByte()
               $fs.Close()
-              if ($b1 -eq 0x4D -and $b2 -eq 0x5A) { $pe += $f }
+              if ($b1 -eq 0x4D -and $b2 -eq 0x5A) { $peFiles += $f }
             } catch { }
           }
-          if ($pe.Count -eq 0) {
-            Write-Error "No PE files found. Build likely failed or produced a Linux binary."
+          if ($peFiles.Count -eq 0) {
+            Write-Error "No PE file found. Build likely failed or produced a Linux binary."
             exit 1
           }
-          # prefer name containing cangaroo / CANgaroo
-          $chosen = $pe | Where-Object { $_.Name -match 'cangaroo|CANgaroo' } | Select-Object -First 1
-          if (-not $chosen) { $chosen = $pe | Sort-Object Length | Select-Object -Last 1 }
-          Write-Host "Chosen binary: $($chosen.FullName) size $($chosen.Length)"
-          $dest = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
-          Copy-Item -Path $chosen.FullName -Destination $dest -Force
-          Write-Host "Copied to $dest"
+          $chosen = $peFiles | Where-Object { $_.Name -match 'cangaroo|CANgaroo' } | Select-Object -First 1
+          if (-not $chosen) { $chosen = $peFiles | Sort-Object Length | Select-Object -Last 1 }
+          Write-Host "Chosen PE file: $($chosen.FullName) (size $($chosen.Length))"
+          $outExePath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
+          Copy-Item -Path $chosen.FullName -Destination $outExePath -Force
+          Write-Host "Copied to $outExePath"
+          # diagnostics
           $hash = (Get-FileHash -Path $chosen.FullName -Algorithm SHA256).Hash
-          $first = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
-          $hex = ($first | ForEach-Object { $_.ToString('X2') }) -join ' '
-          $info = @("OriginalPath=$($chosen.FullName)","OriginalName=$($chosen.Name)","ChosenSize=$($chosen.Length)","SHA256=$hash","First128Hex=$hex")
+          $firstBytes = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
+          $hex = ($firstBytes | ForEach-Object { $_.ToString("X2") }) -join ' '
+          $info = @()
+          $info += "OriginalPath=$($chosen.FullName)"
+          $info += "OriginalName=$($chosen.Name)"
+          $info += "ChosenSize=$($chosen.Length)"
+          $info += "ChosenSHA256=$hash"
+          $info += "First128BytesHex=$hex"
           $infoPath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'candidate-info.txt'
           $info | Out-File -FilePath $infoPath -Encoding UTF8
-          Write-Host "Wrote diagnostics to $infoPath"
-          echo "exe=$dest" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
-          echo "candidate=$($chosen.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
-          echo "candidate_info=$infoPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
+          echo "exe=$outExePath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+          echo "candidate=$($chosen.FullName)" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+          echo "candidate_info=$infoPath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Upload candidate binary and info (always)
+      - name: Upload candidate binary and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -126,48 +129,19 @@ jobs:
             ${{ steps.find-exe.outputs.candidate }}
             ${{ steps.find-exe.outputs.candidate_info }}
 
-      - name: Run windeployqt (MinGW) to collect Qt runtime (use normalized exe)
-        shell: bash
+      - name: Run windeployqt (MinGW) to collect Qt runtime
+        shell: pwsh
         run: |
-          set -e
-          export PATH="/mingw64/bin:$PATH"
-          exe="${{ steps.find-exe.outputs.exe }}"
-          if [ -z "$exe" ]; then
-            echo "No exe path provided; exiting with error."
-            exit 1
-          fi
-          # Convert Windows path if running in bash (GitHub Actions powershell set exe path uses Windows separators)
-          # Ensure path style is Windows for windeployqt; windeployqt under MSYS2 accepts posix path as well.
-          echo "Using exe: $exe"
-          outdir="$(dirname "$exe")/cangaroo_deploy"
-          mkdir -p "$outdir"
-          # windeployqt from mingw should be available
-          if ! command -v /mingw64/bin/windeployqt >/dev/null 2>&1; then
-            echo "windeployqt not found at /mingw64/bin/windeployqt"
-            # try to find it
-            W=$(which windeployqt || true)
-            if [ -z "$W" ]; then
-              echo "windeployqt not found in PATH. Deployment will fail."
-              exit 1
-            else
-              echo "Found windeployqt at $W"
-            fi
-          fi
-          /mingw64/bin/windeployqt --release --dir "$outdir" "$exe"
-          # also copy exe into deploy folder
-          cp "$exe" "$outdir/CANgaroo.exe"
-
-      - name: Show deploy folder contents
-        shell: bash
-        run: |
-          set -e
-          outdir=$(find . -type d -name cangaroo_deploy | head -n1 || true)
-          if [ -z "$outdir" ]; then
-            echo "Deploy folder not found"
-            exit 1
-          fi
-          echo "Deploy folder: $outdir"
-          ls -la "$outdir"
+          $exe = "${{ steps.find-exe.outputs.exe }}"
+          if (-not $exe) { Write-Error "exe path missing"; exit 1 }
+          $msys_bash = 'C:\tools\msys64\usr\bin\bash.exe'
+          & $msys_bash -lc "
+            set -e
+            export PATH=/mingw64/bin:\$PATH
+            exe_path='${exe//\\//}'
+            # msys path might need conversion, but /mingw64/windeployqt accepts Windows path
+            /mingw64/bin/windeployqt --release --dir \"$(dirname \"$exe_path\")/cangaroo_deploy\" \"$exe_path\"
+          "
 
       - name: Archive deploy folder
         shell: pwsh
@@ -186,7 +160,7 @@ jobs:
           name: CANgaroo-windows
           path: CANgaroo-Windows.zip
 
-      - name: Upload logs on failure
+      - name: Upload build logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
