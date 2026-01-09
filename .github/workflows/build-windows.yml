@@ -1,4 +1,4 @@
-# Build CANgaroo on Windows, collect diagnostics if produced binary is invalid.
+# Build CANgaroo on Windows, detect PE binary, run windeployqt, upload ZIP artifact.
 name: Build CANgaroo Windows executable
 
 on:
@@ -9,20 +9,17 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Qt
+      - name: Set up Qt (Windows)
         uses: lukka/get-qt@v3
         with:
-          qt-version: '6.6.4'
+          qt-version: '6.6.4'    # adaptez si besoin
           host: 'windows'
-
-      - name: Ensure 7zip (optional helper)
-        run: choco install -y 7zip
-        shell: cmd
 
       - name: (Optional) Download PCAN Basic SDK into expected path
         run: |
@@ -42,6 +39,7 @@ jobs:
       - name: Generate Visual Studio solution with qmake
         run: |
           Write-Host "Running qmake to generate Visual Studio solution..."
+          # qmake from get-qt should be available in PATH
           qmake -tp vc src/src.pro -o CANgaroo.sln
         shell: pwsh
 
@@ -54,7 +52,7 @@ jobs:
       - name: List build output (diagnostic)
         run: |
           Write-Host "Listing files produced by build (for debugging):"
-          Get-ChildItem -Path . -Recurse -Force | Sort-Object FullName | Format-Table FullName,Length,Attributes -AutoSize
+          Get-ChildItem -Path . -Recurse -Force | Sort-Object FullName | Format-Table FullName,Length -AutoSize
         shell: pwsh
 
       - name: Find produced executable (detect PE header even if no .exe ext) and copy as CANgaroo.exe
@@ -87,7 +85,7 @@ jobs:
           $outExePath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
           Copy-Item -Path $chosen.FullName -Destination $outExePath -Force
           Write-Host "Copied to $outExePath"
-          # Create diagnostic info: size & sha256 & hex first bytes
+          # diagnostics
           $hash = (Get-FileHash -Path $chosen.FullName -Algorithm SHA256).Hash
           $firstBytes = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
           $hex = ($firstBytes | ForEach-Object { $_.ToString("X2") }) -join ' '
@@ -99,7 +97,6 @@ jobs:
           $info += "First128BytesHex=$hex"
           $infoPath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'candidate-info.txt'
           $info | Out-File -FilePath $infoPath -Encoding UTF8
-          # expose outputs
           echo "exe=$outExePath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
           echo "candidate=$($chosen.FullName)" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
           echo "candidate_info=$infoPath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
@@ -120,10 +117,11 @@ jobs:
           $outdir = Join-Path -Path (Split-Path -Parent $exe) -ChildPath 'cangaroo_deploy'
           if (-not (Test-Path $outdir)) { New-Item -ItemType Directory -Path $outdir | Out-Null }
 
+          # Find windeployqt (get-qt usually puts it on PATH)
           $windeploy = (Get-Command windeployqt -ErrorAction SilentlyContinue).Source
           if (-not $windeploy) {
-            Write-Host "windeployqt not found in PATH, trying C:\\Qt..."
-            $possible = Get-ChildItem -Path C:\Qt -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            Write-Host "windeployqt not in PATH, searching common Qt locations..."
+            $possible = Get-ChildItem -Path 'C:\' -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($possible) { $windeploy = $possible.FullName }
           }
           if (-not $windeploy) {
@@ -131,7 +129,6 @@ jobs:
             exit 1
           }
           Write-Host "windeployqt found at: $windeploy"
-
           & $windeploy --release --dir "$outdir" "$exe"
           Copy-Item -Path "$exe" -Destination (Join-Path $outdir 'CANgaroo.exe') -Force
           Write-Host "Deployment folder prepared at: $outdir"
@@ -160,12 +157,3 @@ jobs:
         with:
           name: CANgaroo-windows
           path: CANgaroo-Windows.zip
-
-      - name: Upload build logs (optional on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cangaroo-build-logs
-          path: |
-            **/*.log
-            **/CMakeFiles/**/CMakeOutput.log
