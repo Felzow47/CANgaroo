@@ -1,5 +1,4 @@
-# Build CANgaroo on Windows, detect produced PE file even without .exe extension,
-# normalize the binary name to CANgaroo.exe, run windeployqt, archive and upload artifact.
+# Build CANgaroo on Windows, collect diagnostics if produced binary is invalid.
 name: Build CANgaroo Windows executable
 
 on:
@@ -18,7 +17,7 @@ jobs:
       - name: Set up Qt
         uses: lukka/get-qt@v3
         with:
-          qt-version: '6.6.4'      # ajustez si besoin
+          qt-version: '6.6.4'
           host: 'windows'
 
       - name: Ensure 7zip (optional helper)
@@ -88,8 +87,31 @@ jobs:
           $outExePath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
           Copy-Item -Path $chosen.FullName -Destination $outExePath -Force
           Write-Host "Copied to $outExePath"
+          # Create diagnostic info: size & sha256 & hex first bytes
+          $hash = (Get-FileHash -Path $chosen.FullName -Algorithm SHA256).Hash
+          $firstBytes = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
+          $hex = ($firstBytes | ForEach-Object { $_.ToString("X2") }) -join ' '
+          $info = @()
+          $info += "OriginalPath=$($chosen.FullName)"
+          $info += "OriginalName=$($chosen.Name)"
+          $info += "ChosenSize=$($chosen.Length)"
+          $info += "ChosenSHA256=$hash"
+          $info += "First128BytesHex=$hex"
+          $infoPath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'candidate-info.txt'
+          $info | Out-File -FilePath $infoPath -Encoding UTF8
+          # expose outputs
           echo "exe=$outExePath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+          echo "candidate=$($chosen.FullName)" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+          echo "candidate_info=$infoPath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
         shell: pwsh
+
+      - name: Upload candidate binary and diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-binary
+          path: |
+            ${{ steps.find-exe.outputs.candidate }}
+            ${{ steps.find-exe.outputs.candidate_info }}
 
       - name: Run windeployqt to collect Qt runtime (use normalized exe)
         run: |
@@ -98,11 +120,9 @@ jobs:
           $outdir = Join-Path -Path (Split-Path -Parent $exe) -ChildPath 'cangaroo_deploy'
           if (-not (Test-Path $outdir)) { New-Item -ItemType Directory -Path $outdir | Out-Null }
 
-          # Try find windeployqt (should be in PATH thanks to get-qt)
           $windeploy = (Get-Command windeployqt -ErrorAction SilentlyContinue).Source
           if (-not $windeploy) {
-            # Search common Qt install locations as fallback (lukka/get-qt usually updates PATH)
-            Write-Host "windeployqt not found in PATH, trying to locate under C:\\Qt..."
+            Write-Host "windeployqt not found in PATH, trying C:\\Qt..."
             $possible = Get-ChildItem -Path C:\Qt -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($possible) { $windeploy = $possible.FullName }
           }
@@ -112,9 +132,7 @@ jobs:
           }
           Write-Host "windeployqt found at: $windeploy"
 
-          # Run windeployqt on the normalized exe
           & $windeploy --release --dir "$outdir" "$exe"
-          # copy the exe into deploy folder as well (named CANgaroo.exe)
           Copy-Item -Path "$exe" -Destination (Join-Path $outdir 'CANgaroo.exe') -Force
           Write-Host "Deployment folder prepared at: $outdir"
         shell: pwsh
@@ -137,7 +155,7 @@ jobs:
           Write-Host "Created $zip with contents of $($outdir.FullName)"
         shell: pwsh
 
-      - name: Upload artifact
+      - name: Upload deploy zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: CANgaroo-windows
