@@ -1,4 +1,5 @@
-# Build CANgaroo on Windows, run windeployqt, and upload a zip artifact.
+# Build CANgaroo on Windows, detect produced PE file even without .exe extension,
+# normalize the binary name to CANgaroo.exe, run windeployqt, archive and upload artifact.
 name: Build CANgaroo Windows executable
 
 on:
@@ -33,40 +34,97 @@ jobs:
           try {
             Invoke-WebRequest -Uri $pcanUrl -OutFile $zip -UseBasicParsing -ErrorAction Stop
             Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
+            Write-Host "PCAN SDK downloaded and extracted to $dest"
           } catch {
-            Write-Host "PCAN download failed or not required; continuing without PCAN."
+            Write-Host "PCAN download failed or skipped; continuing without PCAN."
           }
         shell: pwsh
 
       - name: Generate Visual Studio solution with qmake
         run: |
-          # Generate a Visual Studio solution using qmake provided by Qt
+          Write-Host "Running qmake to generate Visual Studio solution..."
           qmake -tp vc src/src.pro -o CANgaroo.sln
-        shell: bash
+        shell: pwsh
 
       - name: Build solution (Release)
         run: |
+          Write-Host "Building solution with msbuild..."
           msbuild CANgaroo.sln /p:Configuration=Release /m
         shell: pwsh
 
-      - name: Find produced executable
-        id: find-exe
+      - name: List build output (diagnostic)
         run: |
-          $exe = Get-ChildItem -Path . -Filter *.exe -Recurse | Sort-Object Length | Select-Object -Last 1
-          if (-not $exe) { Write-Error 'No executable found'; exit 1 }
-          Write-Host "Found executable: $($exe.FullName)"
-          echo "exe=$($exe.FullName)" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Listing files produced by build (for debugging):"
+          Get-ChildItem -Path . -Recurse -Force | Sort-Object FullName | Format-Table FullName,Length,Attributes -AutoSize
         shell: pwsh
 
-      - name: Run windeployqt to collect Qt runtime
+      - name: Find produced executable (detect PE header even if no .exe ext) and copy as CANgaroo.exe
+        id: find-exe
+        run: |
+          Write-Host "Searching for PE files (MZ header)..."
+          $candidates = Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue
+          $peFiles = @()
+          foreach ($f in $candidates) {
+            try {
+              $fs = [System.IO.File]::Open($f.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+              $b1 = $fs.ReadByte()
+              $b2 = $fs.ReadByte()
+              $fs.Close()
+              if ($b1 -eq 0x4D -and $b2 -eq 0x5A) {
+                $peFiles += $f
+              }
+            } catch { }
+          }
+          if ($peFiles.Count -eq 0) {
+            Write-Error "No PE file found in repo tree. Build may have failed."
+            exit 1
+          }
+          # Prefer file with name containing 'CANgaroo' or pick the largest PE found
+          $chosen = $peFiles | Where-Object { $_.Name -match 'CANgaroo' } | Select-Object -First 1
+          if (-not $chosen) {
+            $chosen = $peFiles | Sort-Object Length | Select-Object -Last 1
+          }
+          Write-Host "Chosen PE file: $($chosen.FullName) (size $($chosen.Length))"
+          $outExePath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
+          Copy-Item -Path $chosen.FullName -Destination $outExePath -Force
+          Write-Host "Copied to $outExePath"
+          echo "exe=$outExePath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+        shell: pwsh
+
+      - name: Run windeployqt to collect Qt runtime (use normalized exe)
         run: |
           $exe = "${{ steps.find-exe.outputs.exe }}"
+          Write-Host "Using exe: $exe"
           $outdir = Join-Path -Path (Split-Path -Parent $exe) -ChildPath 'cangaroo_deploy'
           if (-not (Test-Path $outdir)) { New-Item -ItemType Directory -Path $outdir | Out-Null }
-          # windeployqt doit être dans le PATH grâce à l'action get-qt
-          windeployqt --release --dir "$outdir" "$exe"
-          # copy the exe into deploy folder as well
-          Copy-Item -Path "$exe" -Destination "$outdir" -Force
+
+          # Try find windeployqt (should be in PATH thanks to get-qt)
+          $windeploy = (Get-Command windeployqt -ErrorAction SilentlyContinue).Source
+          if (-not $windeploy) {
+            # Search common Qt install locations as fallback (lukka/get-qt usually updates PATH)
+            Write-Host "windeployqt not found in PATH, trying to locate under C:\\Qt..."
+            $possible = Get-ChildItem -Path C:\Qt -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($possible) { $windeploy = $possible.FullName }
+          }
+          if (-not $windeploy) {
+            Write-Error "windeployqt not found. Check Qt setup or adjust qt-version in the workflow."
+            exit 1
+          }
+          Write-Host "windeployqt found at: $windeploy"
+
+          # Run windeployqt on the normalized exe
+          & $windeploy --release --dir "$outdir" "$exe"
+          # copy the exe into deploy folder as well (named CANgaroo.exe)
+          Copy-Item -Path "$exe" -Destination (Join-Path $outdir 'CANgaroo.exe') -Force
+          Write-Host "Deployment folder prepared at: $outdir"
+        shell: pwsh
+
+      - name: Show contents of deploy folder (diagnostic)
+        run: |
+          $outdir = Get-ChildItem -Path . -Directory -Recurse | Where-Object { $_.Name -eq 'cangaroo_deploy' } | Select-Object -First 1
+          if (-not $outdir) { Write-Error 'Deploy folder not found'; exit 1 }
+          Write-Host "Files in deploy folder:"
+          Get-ChildItem -Path $outdir.FullName -Recurse | Format-Table FullName,Length -AutoSize
         shell: pwsh
 
       - name: Archive deploy folder
@@ -75,8 +133,8 @@ jobs:
           if (-not $outdir) { Write-Error 'Deploy folder not found'; exit 1 }
           $zip = 'CANgaroo-Windows.zip'
           Remove-Item -Path $zip -ErrorAction Ignore
-          Compress-Archive -Path "$($outdir.FullName)/*" -DestinationPath $zip -Force
-          Write-Host "Created $zip"
+          Compress-Archive -Path "$($outdir.FullName)\*" -DestinationPath $zip -Force
+          Write-Host "Created $zip with contents of $($outdir.FullName)"
         shell: pwsh
 
       - name: Upload artifact
