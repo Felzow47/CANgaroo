@@ -1,0 +1,95 @@
+# Build CANgaroo on Windows, run windeployqt, and upload a zip artifact.
+name: Build CANgaroo Windows executable
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Qt
+        uses: lukka/get-qt@v3
+        with:
+          qt-version: '6.6.4'      # ajustez si besoin
+          host: 'windows'
+
+      - name: Ensure 7zip (optional helper)
+        run: choco install -y 7zip
+        shell: cmd
+
+      - name: (Optional) Download PCAN Basic SDK into expected path
+        run: |
+          $pcanUrl = 'http://www.peak-system.com/fileadmin/media/files/pcan-basic.zip'
+          $dest = 'src/driver/PeakCanDriver/pcan-basic-api'
+          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+          $zip = 'pcan-basic.zip'
+          try {
+            Invoke-WebRequest -Uri $pcanUrl -OutFile $zip -UseBasicParsing -ErrorAction Stop
+            Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
+          } catch {
+            Write-Host "PCAN download failed or not required; continuing without PCAN."
+          }
+        shell: pwsh
+
+      - name: Generate Visual Studio solution with qmake
+        run: |
+          # Generate a Visual Studio solution using qmake provided by Qt
+          qmake -tp vc src/src.pro -o CANgaroo.sln
+        shell: bash
+
+      - name: Build solution (Release)
+        run: |
+          msbuild CANgaroo.sln /p:Configuration=Release /m
+        shell: pwsh
+
+      - name: Find produced executable
+        id: find-exe
+        run: |
+          $exe = Get-ChildItem -Path . -Filter *.exe -Recurse | Sort-Object Length | Select-Object -Last 1
+          if (-not $exe) { Write-Error 'No executable found'; exit 1 }
+          Write-Host "Found executable: $($exe.FullName)"
+          echo "exe=$($exe.FullName)" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+        shell: pwsh
+
+      - name: Run windeployqt to collect Qt runtime
+        run: |
+          $exe = "${{ steps.find-exe.outputs.exe }}"
+          $outdir = Join-Path -Path (Split-Path -Parent $exe) -ChildPath 'cangaroo_deploy'
+          if (-not (Test-Path $outdir)) { New-Item -ItemType Directory -Path $outdir | Out-Null }
+          # windeployqt doit être dans le PATH grâce à l'action get-qt
+          windeployqt --release --dir "$outdir" "$exe"
+          # copy the exe into deploy folder as well
+          Copy-Item -Path "$exe" -Destination "$outdir" -Force
+        shell: pwsh
+
+      - name: Archive deploy folder
+        run: |
+          $outdir = Get-ChildItem -Path . -Directory -Recurse | Where-Object { $_.Name -eq 'cangaroo_deploy' } | Select-Object -First 1
+          if (-not $outdir) { Write-Error 'Deploy folder not found'; exit 1 }
+          $zip = 'CANgaroo-Windows.zip'
+          Remove-Item -Path $zip -ErrorAction Ignore
+          Compress-Archive -Path "$($outdir.FullName)/*" -DestinationPath $zip -Force
+          Write-Host "Created $zip"
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CANgaroo-windows
+          path: CANgaroo-Windows.zip
+
+      - name: Upload build logs (optional on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cangaroo-build-logs
+          path: |
+            **/*.log
+            **/CMakeFiles/**/CMakeOutput.log
