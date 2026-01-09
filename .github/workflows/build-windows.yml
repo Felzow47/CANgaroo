@@ -1,4 +1,6 @@
-# Build CANgaroo on Windows, detect PE binary, run windeployqt, upload ZIP artifact.
+# Build CANgaroo on Windows using Chocolatey to install Qt (fallback when marketplace actions are blocked).
+# Tries to locate qmake and windeployqt, builds with MSBuild, normalizes exe name, runs windeployqt,
+# uploads diagnostic candidate and the final ZIP artifact.
 name: Build CANgaroo Windows executable
 
 on:
@@ -9,44 +11,138 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Qt (Windows)
-        uses: lukka/get-qt@v3
-        with:
-          qt-version: '6.6.4'    # adaptez si besoin
-          host: 'windows'
-
-      - name: (Optional) Download PCAN Basic SDK into expected path
+      - name: Enable chocolatey and install prebuild tools (git/msbuild present)
         run: |
-          $pcanUrl = 'http://www.peak-system.com/fileadmin/media/files/pcan-basic.zip'
-          $dest = 'src/driver/PeakCanDriver/pcan-basic-api'
-          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
-          $zip = 'pcan-basic.zip'
-          try {
-            Invoke-WebRequest -Uri $pcanUrl -OutFile $zip -UseBasicParsing -ErrorAction Stop
-            Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
-            Write-Host "PCAN SDK downloaded and extracted to $dest"
-          } catch {
-            Write-Host "PCAN download failed or skipped; continuing without PCAN."
+          choco feature enable -n allowGlobalConfirmation
+          choco feature enable -n useWindowsCompression
+          # ensure 7zip present for some extraction needs
+          choco install -y 7zip
+        shell: pwsh
+
+      - name: Install Qt via Chocolatey (fallback)
+        id: install-qt
+        run: |
+          choco feature enable -n allowGlobalConfirmation
+          # Try several possible Qt choco package names (may vary by feed)
+          $candidates = @('qt','qt5','qt6','qt-installer','qt5-default')
+          $installed = $false
+          foreach ($pkg in $candidates) {
+            Write-Host "Trying choco install $pkg ..."
+            try {
+              choco install -y $pkg --no-progress
+              $installed = $true
+              Write-Host "Installed package: $pkg"
+              break
+            } catch {
+              Write-Host "choco install $pkg failed or not available; continuing to next candidate."
+            }
           }
+          if (-not $installed) {
+            Write-Host "Chocolatey install of Qt candidates failed. We'll still search common locations on the runner for existing Qt."
+          }
+          # small delay to let choco finish placing files
+          Start-Sleep -Seconds 3
+
+          # Search common locations for qmake/windeployqt
+          $searchRoots = @('C:\Qt','C:\Program Files\Qt','C:\Program Files (x86)\Qt','C:\tools','C:\ProgramData\chocolatey\lib')
+          $qmakePath = $null
+          $windeployPath = $null
+          foreach ($root in $searchRoots) {
+            if (-not (Test-Path $root)) { continue }
+            Write-Host "Searching under $root ..."
+            try {
+              if (-not $qmakePath) {
+                $q = Get-ChildItem -Path $root -Filter qmake.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($q) { $qmakePath = $q.FullName; Write-Host "Found qmake: $qmakePath" }
+              }
+              if (-not $windeployPath) {
+                $w = Get-ChildItem -Path $root -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($w) { $windeployPath = $w.FullName; Write-Host "Found windeployqt: $windeployPath" }
+              }
+            } catch { }
+            if ($qmakePath -and $windeployPath) { break }
+          }
+
+          # fallback: search full C:\ but limit depth/time to avoid very long scans
+          if (-not ($qmakePath -and $windeployPath)) {
+            Write-Host "Fallback searching entire C:\\ (limited to first matches - may be slow)..."
+            try {
+              if (-not $qmakePath) {
+                $q = Get-ChildItem -Path C:\ -Filter qmake.exe -Recurse -ErrorAction SilentlyContinue -Depth 6 | Select-Object -First 1
+                if ($q) { $qmakePath = $q.FullName; Write-Host "Found qmake (fallback): $qmakePath" }
+              }
+              if (-not $windeployPath) {
+                $w = Get-ChildItem -Path C:\ -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue -Depth 6 | Select-Object -First 1
+                if ($w) { $windeployPath = $w.FullName; Write-Host "Found windeployqt (fallback): $windeployPath" }
+              }
+            } catch {
+              Write-Host "Full-disk fallback search encountered errors: $_"
+            }
+          }
+
+          # Expose discovered paths (may be empty)
+          if ($qmakePath) {
+            $qdir = Split-Path -Parent $qmakePath
+            Write-Host "Adding qmake dir to PATH: $qdir"
+            echo "QMAKE_DIR=$qdir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
+            $env:PATH = "$qdir;$env:PATH"
+          } else {
+            Write-Host "qmake not found on system. Build step will likely fail unless qmake is on PATH."
+          }
+
+          if ($windeployPath) {
+            $wdir = Split-Path -Parent $windeployPath
+            Write-Host "Adding windeployqt dir to PATH: $wdir"
+            echo "WINDEPLOY_DIR=$wdir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
+            $env:PATH = "$wdir;$env:PATH"
+          } else {
+            Write-Host "windeployqt not found on system. Deployment step will likely fail."
+          }
+        shell: pwsh
+
+      - name: Show environment & PATH (diagnostic)
+        run: |
+          Write-Host "PATH ="
+          $env:PATH.Split(';') | Select-Object -First 30 | ForEach-Object { Write-Host $_ }
+          Write-Host "Where qmake:"
+          Get-Command qmake* -ErrorAction SilentlyContinue | Format-Table Name,Source -AutoSize
+          Write-Host "Where windeployqt:"
+          Get-Command windeployqt -ErrorAction SilentlyContinue | Format-Table Name,Source -AutoSize
         shell: pwsh
 
       - name: Generate Visual Studio solution with qmake
         run: |
           Write-Host "Running qmake to generate Visual Studio solution..."
-          # qmake from get-qt should be available in PATH
-          qmake -tp vc src/src.pro -o CANgaroo.sln
+          # prefer qmake6/qmake in PATH; if qmake not available, try qmake.exe explicit search
+          $qmake = (Get-Command qmake6 -ErrorAction SilentlyContinue).Source -or (Get-Command qmake -ErrorAction SilentlyContinue).Source
+          if (-not $qmake) {
+            Write-Host "qmake not found in PATH. Attempting to locate qmake in common Qt directories..."
+            $q = Get-ChildItem -Path 'C:\Qt','C:\Program Files\Qt','C:\Program Files (x86)\Qt' -Filter qmake.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($q) { $qmake = $q.FullName; Write-Host "Found qmake at $qmake" }
+          }
+          if (-not $qmake) {
+            Write-Error "qmake not found. Cannot generate Visual Studio solution. Ensure Qt is installed and qmake is on PATH."
+            exit 1
+          }
+          & $qmake -tp vc src/src.pro -o CANgaroo.sln
         shell: pwsh
 
-      - name: Build solution (Release)
+      - name: Build solution (Release) with MSBuild
         run: |
           Write-Host "Building solution with msbuild..."
-          msbuild CANgaroo.sln /p:Configuration=Release /m
+          # use msbuild in PATH (comes with windows-latest)
+          $msbuild = (Get-Command msbuild -ErrorAction SilentlyContinue).Source
+          if (-not $msbuild) {
+            Write-Error "msbuild not found in PATH."
+            exit 1
+          }
+          & $msbuild CANgaroo.sln /p:Configuration=Release /m
         shell: pwsh
 
       - name: List build output (diagnostic)
@@ -73,7 +169,7 @@ jobs:
             } catch { }
           }
           if ($peFiles.Count -eq 0) {
-            Write-Error "No PE file found in repo tree. Build may have failed."
+            Write-Error "No PE file found in repo tree. Build may have produced a Linux ELF or failed."
             exit 1
           }
           # Prefer file with name containing 'CANgaroo' or pick the largest PE found
@@ -85,7 +181,7 @@ jobs:
           $outExePath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
           Copy-Item -Path $chosen.FullName -Destination $outExePath -Force
           Write-Host "Copied to $outExePath"
-          # diagnostics
+          # diagnostics: hash & head bytes
           $hash = (Get-FileHash -Path $chosen.FullName -Algorithm SHA256).Hash
           $firstBytes = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
           $hex = ($firstBytes | ForEach-Object { $_.ToString("X2") }) -join ' '
@@ -103,6 +199,7 @@ jobs:
         shell: pwsh
 
       - name: Upload candidate binary and diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: candidate-binary
@@ -117,15 +214,15 @@ jobs:
           $outdir = Join-Path -Path (Split-Path -Parent $exe) -ChildPath 'cangaroo_deploy'
           if (-not (Test-Path $outdir)) { New-Item -ItemType Directory -Path $outdir | Out-Null }
 
-          # Find windeployqt (get-qt usually puts it on PATH)
-          $windeploy = (Get-Command windeployqt -ErrorAction SilentlyContinue).Source
+          # Find windeployqt in PATH or in discovered WINDEPLOY_DIR
+          $windeploy = (Get-Command windeployqt -ErrorAction SilentlyContinue).Source -or "${{ steps.install-qt.outputs.WINDEPLOY_DIR }}" -or (Get-Command windeployqt.exe -ErrorAction SilentlyContinue).Source
           if (-not $windeploy) {
-            Write-Host "windeployqt not in PATH, searching common Qt locations..."
-            $possible = Get-ChildItem -Path 'C:\' -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            # fallback: try to discover under C:\Qt
+            $possible = Get-ChildItem -Path 'C:\Qt','C:\Program Files\Qt','C:\Program Files (x86)\Qt' -Filter windeployqt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($possible) { $windeploy = $possible.FullName }
           }
           if (-not $windeploy) {
-            Write-Error "windeployqt not found. Check Qt setup or adjust qt-version in the workflow."
+            Write-Error "windeployqt not found. Skipping deployment. Ensure Qt installation provides windeployqt."
             exit 1
           }
           Write-Host "windeployqt found at: $windeploy"
@@ -153,7 +250,17 @@ jobs:
         shell: pwsh
 
       - name: Upload deploy zip artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: CANgaroo-windows
           path: CANgaroo-Windows.zip
+
+      - name: Upload build logs (optional on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cangaroo-build-logs
+          path: |
+            **/*.log
+            **/CMakeFiles/**/CMakeOutput.log
