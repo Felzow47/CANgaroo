@@ -1,170 +1,81 @@
-# Build CANgaroo on Windows using MSYS2 (MinGW). Uses explicit MSYS2 shell to run pacman.
-name: Build CANgaroo (Windows, MSYS2 + MinGW)
+name: Debug MSYS2 on Windows runner
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, master ]
-  workflow_dispatch: {}
 
 jobs:
-  build-windows-mingw:
+  msys2-debug:
     runs-on: windows-latest
-    timeout-minutes: 180
-
+    timeout-minutes: 30
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install MSYS2 via Chocolatey
+      - name: Install MSYS2 (if missing) via choco
         shell: pwsh
         run: |
           choco feature enable -n allowGlobalConfirmation
-          choco install -y msys2
-          refreshenv
-
-      - name: Update MSYS2 and install MinGW + Qt (run inside MSYS2 shell)
-        shell: pwsh
-        run: |
-          $msys_bash = 'C:\tools\msys64\usr\bin\bash.exe'
-          if (-not (Test-Path $msys_bash)) {
-            Write-Error "MSYS2 bash not found at $msys_bash"
-            exit 1
+          if (-not (Test-Path 'C:\tools\msys64')) {
+            choco install -y msys2
+            refreshenv
+          } else {
+            Write-Host "MSYS2 already installed at C:\tools\msys64"
           }
-          # Run updates and install packages inside MSYS2; this can be long.
-          # We run a robust sequence: full DB update then package installs.
-          & $msys_bash -lc '
-            set -e
-            echo "Start MSYS2 update (may restart pacman internally)..."
-            pacman --noconfirm -Syuu || true
-            # run again to finish upgrades
-            pacman --noconfirm -Su
-            echo "Install MinGW toolchain and Qt6 packages (x86_64)..."
-            pacman --noconfirm -S --needed \
-              mingw-w64-x86_64-toolchain mingw-w64-x86_64-make \
-              mingw-w64-x86_64-qt6 mingw-w64-x86_64-qt6-tools \
-              mingw-w64-x86_64-qt6-serialport mingw-w64-x86_64-qt6-charts \
-              mingw-w64-x86_64-qt6-svg mingw-w64-x86_64-qt6-opengl
-            echo "Installed packages, verifying qmake/windeployqt..."
-            /mingw64/bin/qmake -v || true
-            /mingw64/bin/windeployqt --version || true
-          '
 
-      - name: Build with MinGW (qmake + make) inside MSYS2
+      - name: Diagnostic: show msys2 bash path & basic files (PowerShell)
         shell: pwsh
         run: |
-          $msys_bash = 'C:\tools\msys64\usr\bin\bash.exe'
-          & $msys_bash -lc '
-            set -e
-            export PATH=/mingw64/bin:$PATH
-            echo "Working directory: $(pwd)"
-            # qmake needs to be run from repo root and target src/src.pro
-            if [ -f src/src.pro ]; then
-              cd src
-              /mingw64/bin/qmake -o Makefile src.pro
-              if command -v mingw32-make >/dev/null 2>&1; then
-                mingw32-make -j$(nproc)
-              else
-                make -j$(nproc)
-              fi
-              cd ..
-            else
-              echo "src/src.pro not found"
-              exit 1
-            fi
-          '
-
-      - name: List produced files (diagnostic)
-        shell: pwsh
-        run: |
-          Write-Host "Listing repository files (top levels)"
-          Get-ChildItem -Path . -Recurse -Depth 3 | Sort-Object FullName | Format-Table FullName,Length -AutoSize
-
-      - name: Find produced executable (detect PE header even if no .exe ext) and copy as CANgaroo.exe
-        id: find-exe
-        shell: pwsh
-        run: |
-          Write-Host "Searching for PE files (MZ header)..."
-          $candidates = Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue
-          $peFiles = @()
-          foreach ($f in $candidates) {
-            try {
-              $fs = [System.IO.File]::Open($f.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
-              $b1 = $fs.ReadByte(); $b2 = $fs.ReadByte()
-              $fs.Close()
-              if ($b1 -eq 0x4D -and $b2 -eq 0x5A) { $peFiles += $f }
-            } catch { }
+          $paths = @('C:\tools\msys64\usr\bin\bash.exe','C:\msys64\usr\bin\bash.exe','C:\Program Files\msys64\usr\bin\bash.exe')
+          foreach ($p in $paths) {
+            Write-Host "Check: $p =>" (Test-Path $p)
           }
-          if ($peFiles.Count -eq 0) {
-            Write-Error "No PE file found. Build likely failed or produced a Linux binary."
-            exit 1
-          }
-          $chosen = $peFiles | Where-Object { $_.Name -match 'cangaroo|CANgaroo' } | Select-Object -First 1
-          if (-not $chosen) { $chosen = $peFiles | Sort-Object Length | Select-Object -Last 1 }
-          Write-Host "Chosen PE file: $($chosen.FullName) (size $($chosen.Length))"
-          $outExePath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
-          Copy-Item -Path $chosen.FullName -Destination $outExePath -Force
-          Write-Host "Copied to $outExePath"
-          # diagnostics
-          $hash = (Get-FileHash -Path $chosen.FullName -Algorithm SHA256).Hash
-          $firstBytes = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
-          $hex = ($firstBytes | ForEach-Object { $_.ToString("X2") }) -join ' '
-          $info = @()
-          $info += "OriginalPath=$($chosen.FullName)"
-          $info += "OriginalName=$($chosen.Name)"
-          $info += "ChosenSize=$($chosen.Length)"
-          $info += "ChosenSHA256=$hash"
-          $info += "First128BytesHex=$hex"
-          $infoPath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'candidate-info.txt'
-          $info | Out-File -FilePath $infoPath -Encoding UTF8
-          echo "exe=$outExePath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
-          echo "candidate=$($chosen.FullName)" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
-          echo "candidate_info=$infoPath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "List C:\tools (top):"
+          Get-ChildItem -Path C:\tools -Force -ErrorAction SilentlyContinue | Select-Object -First 50 | Format-Table Name,FullName
+          Write-Host "Env PATH (first 40 entries):"
+          $env:PATH.Split(';') | Select-Object -First 40 | ForEach-Object { Write-Host $_ }
 
-      - name: Upload candidate binary and diagnostics
-        if: always()
+      - name: Diagnostic: run pacman and list /mingw64/bin (MSYS2 shell)
+        shell: pwsh
+        run: |
+          $msys = 'C:\tools\msys64\usr\bin\bash.exe'
+          if (-not (Test-Path $msys)) { $msys = 'C:\msys64\usr\bin\bash.exe' }
+          if (-not (Test-Path $msys)) { Write-Host "MSYS bash not found at standard locations"; exit 0 }
+          & $msys -lc '
+            echo "=== which pacman ==="
+            which pacman || echo "pacman not found"
+            echo "=== pacman -V ==="
+            pacman -V || true
+            echo "=== which /mingw64/bin/qmake and windeployqt ==="
+            which /mingw64/bin/qmake || echo "qmake not found"
+            which /mingw64/bin/windeployqt || echo "windeployqt not found"
+            echo "=== list /mingw64/bin (top 100) ==="
+            ls -l /mingw64/bin | head -n 100 || true
+            echo "=== pacman -Sl mingw64 | head (packages index sample) ==="
+            pacman -Sl mingw64 2>/dev/null | head -n 200 || echo "could not list repo"
+          ' 2>&1 | tee msys2-shell-output.txt
+
+      - name: Collect MSYS2 directories (PowerShell)
+        shell: pwsh
+        run: |
+          $dirs = @('C:\tools\msys64','C:\tools\msys64\usr\bin','C:\tools\msys64\mingw64\bin','C:\msys64','C:\msys64\usr\bin','C:\msys64\mingw64\bin')
+          foreach ($d in $dirs) {
+            if (Test-Path $d) {
+              Write-Host "---- Listing $d (first 200 entries) ----"
+              Get-ChildItem -Path $d -Recurse -Depth 1 -ErrorAction SilentlyContinue | Select-Object -First 200 | Format-Table Name,FullName,Length
+            } else {
+              Write-Host "Not found: $d"
+            }
+          }
+
+      - name: Upload msys2 debug outputs
         uses: actions/upload-artifact@v4
         with:
-          name: candidate-binary
+          name: msys2-debug
           path: |
-            ${{ steps.find-exe.outputs.candidate }}
-            ${{ steps.find-exe.outputs.candidate_info }}
-
-      - name: Run windeployqt (MinGW) to collect Qt runtime
-        shell: pwsh
-        run: |
-          $exe = "${{ steps.find-exe.outputs.exe }}"
-          if (-not $exe) { Write-Error "exe path missing"; exit 1 }
-          $msys_bash = 'C:\tools\msys64\usr\bin\bash.exe'
-          & $msys_bash -lc "
-            set -e
-            export PATH=/mingw64/bin:\$PATH
-            exe_path='${exe//\\//}'
-            # msys path might need conversion, but /mingw64/windeployqt accepts Windows path
-            /mingw64/bin/windeployqt --release --dir \"$(dirname \"$exe_path\")/cangaroo_deploy\" \"$exe_path\"
-          "
-
-      - name: Archive deploy folder
-        shell: pwsh
-        run: |
-          $outdir = Get-ChildItem -Path . -Directory -Recurse | Where-Object { $_.Name -eq 'cangaroo_deploy' } | Select-Object -First 1
-          if (-not $outdir) { Write-Error 'Deploy folder not found'; exit 1 }
-          $zip = 'CANgaroo-Windows.zip'
-          Remove-Item -Path $zip -ErrorAction Ignore
-          Compress-Archive -Path "$($outdir.FullName)\*" -DestinationPath $zip -Force
-          Write-Host "Created $zip with contents of $($outdir.FullName)"
-
-      - name: Upload deploy zip artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: CANgaroo-windows
-          path: CANgaroo-Windows.zip
-
-      - name: Upload build logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cangaroo-build-logs
-          path: |
-            **/*.log
-            **/CMakeFiles/**/CMakeOutput.log
+            msys2-shell-output.txt
+            C:\tools\msys64\usr\bin\bash.exe
+            C:\tools\msys64\mingw64\bin
+            C:\msys64\usr\bin\bash.exe
+            C:\msys64\mingw64\bin
