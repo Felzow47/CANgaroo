@@ -1,5 +1,5 @@
-# Build CANgaroo on Windows (uses lukka/get-qt to install Qt), run windeployqt and upload zip artifact.
-name: Build CANgaroo Windows executable
+# Build CANgaroo on Windows using MSYS2 (MinGW) to install Qt packages, build with qmake, run windeployqt and upload zip.
+name: Build CANgaroo (Windows, MSYS2 + MinGW)
 
 on:
   push:
@@ -7,88 +7,117 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  build-windows:
+  build-windows-mingw:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Qt (lukka/get-qt)
-        uses: lukka/get-qt@v3
-        with:
-          qt-version: '6.6.4'   # ajustez si besoin (ex: 6.6.4)
-          host: 'windows'
-
-      - name: Ensure 7zip available (optional)
-        run: choco install -y 7zip
+      - name: Install MSYS2 (chocolatey) and required base tools
         shell: pwsh
-
-      - name: (Optional) Download PCAN Basic SDK into expected path
         run: |
-          $pcanUrl = 'http://www.peak-system.com/fileadmin/media/files/pcan-basic.zip'
-          $dest = 'src/driver/PeakCanDriver/pcan-basic-api'
-          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
-          $zip = 'pcan-basic.zip'
-          try {
-            Invoke-WebRequest -Uri $pcanUrl -OutFile $zip -UseBasicParsing -ErrorAction Stop
-            Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
-            Write-Host "PCAN SDK downloaded and extracted to $dest"
-          } catch {
-            Write-Host "PCAN download failed or skipped; continuing without PCAN."
-          }
-        shell: pwsh
+          choco feature enable -n allowGlobalConfirmation
+          choco install -y msys2
+          refreshenv
 
-      - name: Generate Visual Studio solution with qmake
+      - name: Update MSYS2 and install Qt (quite large, first run is slow)
+        # use MSYS2 bash to run pacman commands
+        shell: bash
         run: |
-          Write-Host "Running qmake to generate Visual Studio solution..."
-          # qmake (qmake6) is provided by get-qt and should be in PATH
-          qmake -tp vc src/src.pro -o CANgaroo.sln
-        shell: pwsh
+          set -e
+          # Ensure msys2 paths
+          export MSYS2_DIR="C:/msys64"
+          export PATH="$MSYS2_DIR/usr/bin:$PATH"
+          echo "MSYS2 root: $MSYS2_DIR"
+          # Update the package DB and core system (may require separate steps)
+          pacman -Syu --noconfirm || true
+          # If pacman -Syu updated the runtime, we need to re-open pacman;
+          # run a second full update to finish upgrades (common pattern)
+          pacman -Syu --noconfirm
+          # Install MinGW-w64 toolchain and Qt6 packages (x86_64)
+          pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-make \
+            mingw-w64-x86_64-qt6 mingw-w64-x86_64-qt6-tools \
+            mingw-w64-x86_64-qt6-serialport mingw-w64-x86_64-qt6-charts \
+            mingw-w64-x86_64-qt6-svg mingw-w64-x86_64-qt6-opengl mingw-w64-x86_64-winpthreads
+          # Note: package names may vary across MSYS2 releases; above are the common names.
+          # Confirm qmake and windeployqt are installed
+          echo "qmake location:" $(which /mingw64/bin/qmake || which qmake || true)
+          /mingw64/bin/qmake -version || true
+          echo "windeployqt location:" $(which /mingw64/bin/windeployqt || true)
 
-      - name: Build solution (Release)
+      - name: Prepare build dir
+        shell: bash
         run: |
-          Write-Host "Building solution with msbuild..."
-          msbuild CANgaroo.sln /p:Configuration=Release /m
-        shell: pwsh
+          set -e
+          mkdir -p build-mingw
+          cd build-mingw
+          # go back to repo root later when building
 
-      - name: Find produced executable (detect PE header even if no .exe ext) and copy as CANgaroo.exe
+      - name: Build with qmake (MinGW)
+        shell: bash
+        run: |
+          set -e
+          # Ensure we use MinGW-w64 qt tools
+          export MSYS2_DIR="C:/msys64"
+          export PATH="/mingw64/bin:$PATH"
+          cd src
+          # Generate Makefile with qmake from MinGW (qmake for Qt6)
+          /mingw64/bin/qmake -o Makefile src.pro || /mingw64/bin/qmake -o Makefile ../src/src.pro || qmake -o Makefile src/src.pro
+          # Build using mingw32-make or make
+          if command -v mingw32-make >/dev/null 2>&1; then
+            mingw32-make -j$(nproc)
+          else
+            make -j$(nproc)
+          fi
+
+      - name: List produced files (diagnostic)
+        shell: bash
+        run: |
+          set -e
+          echo "---- built binaries listing ----"
+          find . -type f -maxdepth 4 -printf '%p %k KB\n' || true
+
+      - name: Find produced executable (PE detection) and normalize name
+        shell: pwsh
         id: find-exe
         run: |
-          Write-Host "Searching for PE files (MZ header)..."
-          $candidates = Get-ChildItem -Path . -File -Recurse -ErrorAction SilentlyContinue
-          $peFiles = @()
-          foreach ($f in $candidates) {
+          $root = $PWD.Path
+          Write-Host "Searching for PE (MZ) files under $root"
+          $files = Get-ChildItem -Path $root -File -Recurse -ErrorAction SilentlyContinue
+          $pe = @()
+          foreach ($f in $files) {
             try {
               $fs = [System.IO.File]::Open($f.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
               $b1 = $fs.ReadByte(); $b2 = $fs.ReadByte()
               $fs.Close()
-              if ($b1 -eq 0x4D -and $b2 -eq 0x5A) { $peFiles += $f }
+              if ($b1 -eq 0x4D -and $b2 -eq 0x5A) { $pe += $f }
             } catch { }
           }
-          if ($peFiles.Count -eq 0) {
-            Write-Error "No PE file found. Build may have failed or produced a non-Windows binary."
+          if ($pe.Count -eq 0) {
+            Write-Error "No PE files found. Build likely failed or produced a Linux binary."
             exit 1
           }
-          $chosen = $peFiles | Where-Object { $_.Name -match 'CANgaroo|cangaroo|CAN' } | Select-Object -First 1
-          if (-not $chosen) { $chosen = $peFiles | Sort-Object Length | Select-Object -Last 1 }
-          Write-Host "Chosen PE file: $($chosen.FullName) (size $($chosen.Length))"
-          $outExePath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
-          Copy-Item -Path $chosen.FullName -Destination $outExePath -Force
-          Write-Host "Copied to $outExePath"
+          # prefer name containing cangaroo / CANgaroo
+          $chosen = $pe | Where-Object { $_.Name -match 'cangaroo|CANgaroo' } | Select-Object -First 1
+          if (-not $chosen) { $chosen = $pe | Sort-Object Length | Select-Object -Last 1 }
+          Write-Host "Chosen binary: $($chosen.FullName) size $($chosen.Length)"
+          $dest = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'CANgaroo.exe'
+          Copy-Item -Path $chosen.FullName -Destination $dest -Force
+          Write-Host "Copied to $dest"
           $hash = (Get-FileHash -Path $chosen.FullName -Algorithm SHA256).Hash
-          $firstBytes = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
-          $hex = ($firstBytes | ForEach-Object { $_.ToString("X2") }) -join ' '
-          $info = @("OriginalPath=$($chosen.FullName)","OriginalName=$($chosen.Name)","ChosenSize=$($chosen.Length)","ChosenSHA256=$hash","First128BytesHex=$hex")
+          $first = Get-Content -Path $chosen.FullName -Encoding Byte -TotalCount 128
+          $hex = ($first | ForEach-Object { $_.ToString('X2') }) -join ' '
+          $info = @("OriginalPath=$($chosen.FullName)","OriginalName=$($chosen.Name)","ChosenSize=$($chosen.Length)","SHA256=$hash","First128Hex=$hex")
           $infoPath = Join-Path -Path (Split-Path -Parent $chosen.FullName) -ChildPath 'candidate-info.txt'
           $info | Out-File -FilePath $infoPath -Encoding UTF8
-          echo "exe=$outExePath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
-          echo "candidate=$($chosen.FullName)" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
-          echo "candidate_info=$infoPath" | Out-File -Encoding UTF8 -FilePath $env:GITHUB_OUTPUT -Append
-        shell: pwsh
+          Write-Host "Wrote diagnostics to $infoPath"
+          echo "exe=$dest" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
+          echo "candidate=$($chosen.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
+          echo "candidate_info=$infoPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding UTF8 -Append
 
-      - name: Upload candidate binary & diagnostics (always)
+      - name: Upload candidate binary and info (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -97,33 +126,67 @@ jobs:
             ${{ steps.find-exe.outputs.candidate }}
             ${{ steps.find-exe.outputs.candidate_info }}
 
-      - name: Run windeployqt to collect Qt runtime
+      - name: Run windeployqt (MinGW) to collect Qt runtime (use normalized exe)
+        shell: bash
         run: |
-          $exe = "${{ steps.find-exe.outputs.exe }}"
-          $outdir = Join-Path -Path (Split-Path -Parent $exe) -ChildPath 'cangaroo_deploy'
-          if (-not (Test-Path $outdir)) { New-Item -ItemType Directory -Path $outdir | Out-Null }
-          windeployqt --release --dir "$outdir" "$exe"
-          Copy-Item -Path "$exe" -Destination (Join-Path $outdir 'CANgaroo.exe') -Force
-          Write-Host "Deployment folder prepared at: $outdir"
-        shell: pwsh
+          set -e
+          export PATH="/mingw64/bin:$PATH"
+          exe="${{ steps.find-exe.outputs.exe }}"
+          if [ -z "$exe" ]; then
+            echo "No exe path provided; exiting with error."
+            exit 1
+          fi
+          # Convert Windows path if running in bash (GitHub Actions powershell set exe path uses Windows separators)
+          # Ensure path style is Windows for windeployqt; windeployqt under MSYS2 accepts posix path as well.
+          echo "Using exe: $exe"
+          outdir="$(dirname "$exe")/cangaroo_deploy"
+          mkdir -p "$outdir"
+          # windeployqt from mingw should be available
+          if ! command -v /mingw64/bin/windeployqt >/dev/null 2>&1; then
+            echo "windeployqt not found at /mingw64/bin/windeployqt"
+            # try to find it
+            W=$(which windeployqt || true)
+            if [ -z "$W" ]; then
+              echo "windeployqt not found in PATH. Deployment will fail."
+              exit 1
+            else
+              echo "Found windeployqt at $W"
+            fi
+          fi
+          /mingw64/bin/windeployqt --release --dir "$outdir" "$exe"
+          # also copy exe into deploy folder
+          cp "$exe" "$outdir/CANgaroo.exe"
+
+      - name: Show deploy folder contents
+        shell: bash
+        run: |
+          set -e
+          outdir=$(find . -type d -name cangaroo_deploy | head -n1 || true)
+          if [ -z "$outdir" ]; then
+            echo "Deploy folder not found"
+            exit 1
+          fi
+          echo "Deploy folder: $outdir"
+          ls -la "$outdir"
 
       - name: Archive deploy folder
+        shell: pwsh
         run: |
           $outdir = Get-ChildItem -Path . -Directory -Recurse | Where-Object { $_.Name -eq 'cangaroo_deploy' } | Select-Object -First 1
           if (-not $outdir) { Write-Error 'Deploy folder not found'; exit 1 }
           $zip = 'CANgaroo-Windows.zip'
           Remove-Item -Path $zip -ErrorAction Ignore
           Compress-Archive -Path "$($outdir.FullName)\*" -DestinationPath $zip -Force
-          Write-Host "Created $zip"
-        shell: pwsh
+          Write-Host "Created $zip with contents of $($outdir.FullName)"
 
       - name: Upload deploy zip artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: CANgaroo-windows
           path: CANgaroo-Windows.zip
 
-      - name: Upload build logs (if failure)
+      - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
